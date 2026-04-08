@@ -338,19 +338,21 @@ export default {
 									}
 								}
 								if (!已匹配反代 && config_JSON.优选订阅生成.自用反代?.启用) {
+									const 自用反代关键词 = config_JSON.优选订阅生成.自用反代.关键词 || [];
 									const 国家映射 = config_JSON.优选订阅生成.自用反代.国家映射 || {};
-									let 映射反代IP = null;
-									for (const [标识, 反代地址] of Object.entries(国家映射)) {
-										if (标识 && 节点备注.includes(标识)) { 映射反代IP = 反代地址; break; }
-									}
-									if (映射反代IP) {
-										完整节点路径 = (`${config_JSON.PATH}/proxyip=${映射反代IP}`).replace(/\/\//g, '/') + (config_JSON.启用0RTT ? '?ed=2560' : '');
+									const 构建反代路径 = (ip) => (`${config_JSON.PATH}/proxyip=${ip}`).replace(/\/\//g, '/') + (config_JSON.启用0RTT ? '?ed=2560' : '');
+									// 优先级1: 关键词匹配 → 用自身IP做反代
+									if (自用反代关键词.length > 0 && 自用反代关键词.some(kw => 节点备注.includes(kw))) {
+										完整节点路径 = 构建反代路径(节点地址);
 									} else {
-										const 自用反代关键词 = config_JSON.优选订阅生成.自用反代.关键词 || [];
-										if (自用反代关键词.length === 0 || 自用反代关键词.some(kw => 节点备注.includes(kw))) {
-											完整节点路径 = (`${config_JSON.PATH}/proxyip=${节点地址}`).replace(/\/\//g, '/') + (config_JSON.启用0RTT ? '?ed=2560' : '');
+										// 优先级2: 国家映射 → 用映射的ProxyIP
+										let 映射反代IP = null;
+										for (const [标识, 反代地址] of Object.entries(国家映射)) {
+											if (标识 && 节点备注.includes(标识)) { 映射反代IP = 反代地址; break; }
 										}
+										if (映射反代IP) 完整节点路径 = 构建反代路径(映射反代IP);
 									}
+									// 优先级3: 都没命中 → 不设proxyip, 走全局CDN设置
 								}
 								if (isLoonOrSurge) 完整节点路径 = 完整节点路径.replace(/,/g, '%2C');
 
@@ -2906,7 +2908,8 @@ function 注入自定义UI(response) {
 			},800);
 		});
 		let mapT=null;
-		document.querySelector('#spMapping').addEventListener('input',function(){
+		const mapEl=document.querySelector('#spMapping');
+		mapEl.addEventListener('input',function(){
 			clearTimeout(mapT);mapT=setTimeout(()=>{
 				const m={};
 				this.value.split('\\n').forEach(line=>{
@@ -2916,6 +2919,48 @@ function 注入自定义UI(response) {
 				save(s=>{s['国家映射']=m;});
 			},800);
 		});
+		// 解析映射文本为对象
+		function parseMapping(){
+			const m={};
+			mapEl.value.split('\\n').forEach(line=>{
+				const idx=line.indexOf('=');
+				if(idx>0){const k=line.slice(0,idx).trim(),v=line.slice(idx+1).trim();if(k&&v)m[k]=v;}
+			});
+			return m;
+		}
+		// Hook "获取更多 PROXYIP" 弹窗的确认按钮
+		const hookConfirmBtn=()=>{
+			const btn=document.querySelector('#proxyIPConfirmBtn');
+			if(!btn||btn.dataset.spHooked)return;
+			btn.dataset.spHooked='1';
+			btn.addEventListener('click',()=>{
+				setTimeout(()=>{
+					const ips=window.selectedProxyIPs||[];
+					const list=window.proxyIPListData||[];
+					if(!ips.length||!list.length)return;
+					const current=parseMapping();
+					let changed=false;
+					ips.forEach(ip=>{
+						const data=list.find(p=>p.ip===ip);
+						if(!data)return;
+						const emoji=data.country_emoji||'';
+						if(!emoji)return;
+						if(!current[emoji]){current[emoji]=ip;changed=true;}
+					});
+					if(changed){
+						mapEl.value=Object.entries(current).map(([k,v])=>k+'='+v).join('\\n');
+						save(s=>{s['国家映射']=current;});
+						// 确保开关已打开且映射区可见
+						const tog=document.querySelector('#spToggle');
+						if(tog&&!tog.checked){tog.checked=true;toggleDetails(true);save(s=>{s[F_ON]=true;});}
+					}
+				},200);
+			});
+		};
+		// 持续检测按钮出现(弹窗是动态加载的)
+		const hookObserver=new MutationObserver(hookConfirmBtn);
+		hookObserver.observe(document.body,{childList:true,subtree:true});
+		hookConfirmBtn();
 	}
 	function tryInit(){
 		if(document.querySelector('#spToggle'))return;
