@@ -328,9 +328,16 @@ export default {
 								}
 
 								let 完整节点路径 = config_JSON.完整节点路径;
+								let 已匹配反代 = false;
 								if (反代IP池.length > 0) {
 									const 匹配到的反代IP = 反代IP池.find(p => p.includes(节点地址));
-									if (匹配到的反代IP) 完整节点路径 = (`${config_JSON.PATH}/proxyip=${匹配到的反代IP}`).replace(/\/\//g, '/') + (config_JSON.启用0RTT ? '?ed=2560' : '');
+									if (匹配到的反代IP) {
+										完整节点路径 = (`${config_JSON.PATH}/proxyip=${匹配到的反代IP}`).replace(/\/\//g, '/') + (config_JSON.启用0RTT ? '?ed=2560' : '');
+										已匹配反代 = true;
+									}
+								}
+								if (config_JSON.优选订阅生成.自用反代 && !已匹配反代) {
+									完整节点路径 = (`${config_JSON.PATH}/proxyip=${节点地址}`).replace(/\/\//g, '/') + (config_JSON.启用0RTT ? '?ed=2560' : '');
 								}
 								if (isLoonOrSurge) 完整节点路径 = 完整节点路径.replace(/,/g, '%2C');
 
@@ -2597,6 +2604,7 @@ async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重�
 		Fingerprint: "chrome",
 		优选订阅生成: {
 			local: true, // true: 基于本地的优选地址  false: 优选订阅生成器
+			自用反代: false, // true: 每个入口节点自动以自身IP作为ProxyIP出口
 			本地IP库: {
 				随机IP: true, // 当 随机IP 为true时生效，启用随机IP的数量，否则使用KV内的ADD.txt
 				随机数量: 16,
@@ -2673,6 +2681,8 @@ async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重�
 	config_JSON.UUID = userID;
 	if (!config_JSON.随机路径) config_JSON.随机路径 = false;
 	if (!config_JSON.启用0RTT) config_JSON.启用0RTT = false;
+	if (!config_JSON.优选订阅生成.自用反代) config_JSON.优选订阅生成.自用反代 = false;
+	if (env.SELF_PROXY) config_JSON.优选订阅生成.自用反代 = ['1', 'true'].includes(env.SELF_PROXY.toLowerCase());
 
 	if (env.PATH) config_JSON.PATH = env.PATH.startsWith('/') ? env.PATH : '/' + env.PATH;
 	else if (!config_JSON.PATH) config_JSON.PATH = '/';
