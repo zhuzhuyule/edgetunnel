@@ -2831,68 +2831,59 @@ function 注入自定义UI(response) {
 	if (!contentType.includes('text/html')) return response;
 	const script = `<script>
 (function(){
-	const SECTION='自用反代', F_ENABLE='启用', F_KEYWORDS='关键词';
-	let cfgCache=null, saving=false;
-	async function loadConfig(){
+	const SECTION='自用反代',F_ON='启用',F_KW='关键词';
+	let cfgCache=null,saving=false;
+	async function loadCfg(){
 		if(cfgCache)return cfgCache;
 		try{const r=await fetch('/admin/config.json');cfgCache=await r.json();return cfgCache;}catch(e){return null;}
 	}
-	async function saveField(updater){
-		if(saving)return; saving=true;
+	async function save(fn){
+		if(saving)return;saving=true;
 		try{
-			const c=await loadConfig();if(!c)return;
+			const c=await loadCfg();if(!c)return;
 			if(!c.优选订阅生成)c.优选订阅生成={};
 			if(!c.优选订阅生成[SECTION]||typeof c.优选订阅生成[SECTION]!=='object')c.优选订阅生成[SECTION]={启用:false,关键词:['反代','🔁']};
-			updater(c.优选订阅生成[SECTION]);
-			cfgCache=c;
+			fn(c.优选订阅生成[SECTION]);cfgCache=c;
 			await fetch('/admin/config.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)});
-			const st=document.querySelector('#sp-status');
-			if(st){st.textContent='✓ 已保存';st.style.opacity='1';setTimeout(()=>{st.style.opacity='0';},2000);}
+			const s=document.querySelector('#spSaved');if(s){s.style.opacity='1';setTimeout(()=>s.style.opacity='0',2000);}
 		}catch(e){}finally{saving=false;}
 	}
 	async function init(){
-		const anchor=document.querySelector('#proxyIPSection');
-		if(!anchor||document.querySelector('#selfProxySection'))return;
-		const cfg=await loadConfig();if(!cfg)return;
+		const proxyIPSec=document.querySelector('#proxyIPSection');
+		if(!proxyIPSec||document.querySelector('#spToggle'))return;
+		const moduleContent=proxyIPSec.closest('.module-content');
+		if(!moduleContent)return;
+		const cfg=await loadCfg();if(!cfg)return;
 		const sp=cfg.优选订阅生成?.[SECTION]||{};
-		const enabled=sp[F_ENABLE]===true;
-		const keywords=(sp[F_KEYWORDS]||['反代','🔁']).join(', ');
-		const section=document.createElement('div');
-		section.id='selfProxySection';
-		section.className='form-group';
-		section.innerHTML=\`
-<div class="form-group">
-	<label>入口自用反代</label>
-	<div class="input-wrapper">
-		<div class="checkbox-group" style="margin:0;">
-			<input type="checkbox" id="spToggle" \${enabled?'checked':''}>
-			<label for="spToggle" class="checkbox-label" title="匹配关键词的优选节点将自动以自身IP作为ProxyIP出口">启用入口节点作为反代出口</label>
-		</div>
-		<span id="sp-status" style="font-size:12px;color:#10b981;opacity:0;transition:opacity 0.3s;margin-left:8px;"></span>
-	</div>
-</div>
-<div id="spKeywordsGroup" class="form-group" style="display:\${enabled?'':'none'};">
-	<label for="spKeywords">反代关键词</label>
-	<div class="input-wrapper">
-		<input type="text" id="spKeywords" value="\${keywords}" placeholder="反代, 🔁, proxy" title="节点备注中包含这些关键词时启用自用反代，逗号分隔">
-	</div>
-</div>\`;
-		anchor.after(section);
+		const on=sp[F_ON]===true;
+		const kw=(sp[F_KW]||['反代','🔁']).join(', ');
+		// 第一行: 开关
+		const row1=document.createElement('div');
+		row1.className='form-group';
+		row1.innerHTML='<label>入口自用反代</label><div class="input-wrapper"><div class="checkbox-group"><input type="checkbox" id="spToggle" '+(on?'checked':'')+' title="匹配关键词的优选节点自动以自身IP作为ProxyIP出口"><label for="spToggle" class="checkbox-label">启用入口自用反代</label></div><span id="spSaved" style="font-size:12px;color:#f6821f;opacity:0;transition:opacity .3s;white-space:nowrap;">✓ 已保存</span></div>';
+		// 第二行: 关键词
+		const row2=document.createElement('div');
+		row2.className='form-group';
+		row2.id='spKwRow';
+		row2.style.display=on?'':'none';
+		row2.innerHTML='<label for="spKeywords">反代关键词</label><div class="input-wrapper"><input type="text" id="spKeywords" value="'+kw.replace(/"/g,'&quot;')+'" placeholder="反代, 🔁, proxy" title="节点备注包含这些关键词时启用, 逗号分隔"></div>';
+		// 插入到 module-content 最前面
+		moduleContent.insertBefore(row2,moduleContent.firstChild);
+		moduleContent.insertBefore(row1,moduleContent.firstChild);
+		// 事件
 		document.querySelector('#spToggle').addEventListener('change',function(){
-			document.querySelector('#spKeywordsGroup').style.display=this.checked?'':'none';
-			saveField(s=>{s[F_ENABLE]=this.checked;});
+			document.querySelector('#spKwRow').style.display=this.checked?'':'none';
+			save(s=>{s[F_ON]=this.checked;});
 		});
-		let kwTimer=null;
+		let t=null;
 		document.querySelector('#spKeywords').addEventListener('input',function(){
-			clearTimeout(kwTimer);
-			kwTimer=setTimeout(()=>{
-				const kws=this.value.split(/[,，]/).map(s=>s.trim()).filter(Boolean);
-				saveField(s=>{s[F_KEYWORDS]=kws;});
+			clearTimeout(t);t=setTimeout(()=>{
+				save(s=>{s[F_KW]=this.value.split(/[,，]/).map(v=>v.trim()).filter(Boolean);});
 			},800);
 		});
 	}
 	function tryInit(){
-		if(document.querySelector('#selfProxySection'))return;
+		if(document.querySelector('#spToggle'))return;
 		if(document.querySelector('#proxyIPSection'))init();
 		else setTimeout(tryInit,500);
 	}
