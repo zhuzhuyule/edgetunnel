@@ -207,7 +207,8 @@ export default {
 					}
 
 					ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Admin_Login', config_JSON));
-					return fetch(Pages静态页面 + '/admin' + url.search);
+					const adminResp = await fetch(Pages静态页面 + '/admin' + url.search);
+					return 注入自定义UI(adminResp);
 				} else if (访问路径 === 'logout' || uuidRegex.test(访问路径)) {//清除cookie并跳转到登录页面
 					const 响应 = new Response('重定向中...', { status: 302, headers: { 'Location': '/login' } });
 					响应.headers.set('Set-Cookie', 'auth=; Path=/; Max-Age=0; HttpOnly');
@@ -2817,6 +2818,58 @@ async function 生成随机IP(request, count = 16, 指定端口 = -1, TLS = true
 		return `${ip}:${目标端口}#${cfname}${index + 1}`;
 	});
 	return [randomIPs, randomIPs.join('\n')];
+}
+
+function 注入自定义UI(response) {
+	const contentType = response.headers.get('content-type') || '';
+	if (!contentType.includes('text/html')) return response;
+	const script = `<script>
+(function(){
+	const FIELD='自用反代';
+	let cfgCache=null;
+	async function loadConfig(){
+		if(cfgCache)return cfgCache;
+		try{const r=await fetch('/admin/config.json');cfgCache=await r.json();return cfgCache;}catch(e){return null;}
+	}
+	async function saveConfig(cfg){
+		cfgCache=cfg;
+		await fetch('/admin/config.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});
+	}
+	async function init(){
+		const cfg=await loadConfig();
+		if(!cfg)return;
+		const checked=cfg.优选订阅生成?.[FIELD]===true;
+		const bar=document.createElement('div');
+		bar.id='self-proxy-bar';
+		bar.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 -2px 10px rgba(0,0,0,0.3);font-size:14px;';
+		bar.innerHTML=\`
+			<span style="opacity:0.7;">🔀 反代出口设置</span>
+			<label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:rgba(255,255,255,0.1);padding:6px 14px;border-radius:20px;">
+				<input id="self-proxy-toggle" type="checkbox" \${checked?'checked':''} style="width:16px;height:16px;cursor:pointer;accent-color:#4ade80;">
+				<span>优先使用入口节点作为反代出口</span>
+			</label>
+			<span id="self-proxy-status" style="font-size:12px;opacity:0.6;">\${checked?'已启用':'已关闭'}</span>
+			<button id="self-proxy-close" style="position:absolute;right:10px;background:none;border:none;color:#fff;opacity:0.5;cursor:pointer;font-size:16px;">✕</button>
+		\`;
+		document.body.style.paddingBottom='50px';
+		document.body.appendChild(bar);
+		bar.querySelector('#self-proxy-toggle').addEventListener('change',async function(){
+			const c=await loadConfig();
+			if(!c)return;
+			if(!c.优选订阅生成)c.优选订阅生成={};
+			c.优选订阅生成[FIELD]=this.checked;
+			await saveConfig(c);
+			bar.querySelector('#self-proxy-status').textContent=this.checked?'已启用 ✓':'已关闭';
+		});
+		bar.querySelector('#self-proxy-close').addEventListener('click',()=>{bar.remove();document.body.style.paddingBottom='';});
+	}
+	if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+	else init();
+})();
+<\/script>`;
+	return new HTMLRewriter().on('body', {
+		element(el) { el.append(script, { html: true }); }
+	}).transform(response);
 }
 
 async function 整理成数组(内容) {
