@@ -2887,7 +2887,7 @@ function 注入自定义UI(response) {
 		row3.id='spMapRow';
 		row3.style.display=on?'':'none';
 		row3.style.alignItems='start';
-		row3.innerHTML='<label for="spMapping" style="padding-top:8px;">国家反代映射</label><div class="input-wrapper" style="flex-direction:column;align-items:stretch;gap:4px;"><textarea id="spMapping" rows="4" placeholder="🇯🇵=89.185.25.124\\n🇸🇬=13.251.157.143\\n🇺🇸=38.165.23.211" title="每行一条: 国家标识=ProxyIP" style="width:100%;padding:8px;border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;">'+mapStr.replace(/</g,'&lt;')+'</textarea><div style="font-size:12px;color:#9ca3af;">按国家指定固定出口，可通过下方「获取更多 PROXYIP」自动添加</div></div>';
+		row3.innerHTML='<label for="spMapping" style="padding-top:8px;">国家反代映射</label><div class="input-wrapper" style="flex-direction:column;align-items:stretch;gap:4px;"><textarea id="spMapping" rows="4" placeholder="🇯🇵=89.185.25.124,64.176.52.176\\n🇸🇬=13.251.157.143\\n🇺🇸=38.165.23.211,69.63.211.206" title="每行一条: 国家标识=ProxyIP1,ProxyIP2,...\\n同国家多个IP按顺序轮询，首个优先" style="width:100%;padding:8px;border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;">'+mapStr.replace(/</g,'&lt;')+'</textarea><div style="font-size:12px;color:#9ca3af;">同国家支持多个IP（逗号分隔），按顺序优先使用，失败自动轮换下一个</div></div>';
 		// 插入到 module-content 最前面 (倒序插入)
 		moduleContent.insertBefore(row3,moduleContent.firstChild);
 		moduleContent.insertBefore(row2,moduleContent.firstChild);
@@ -2948,13 +2948,17 @@ function 注入自定义UI(response) {
 			});
 			return entries;
 		}
-		// 将 emoji+IP 列表写入国家映射
+		// 将 emoji+IP 列表写入国家映射（同国家追加，不重复）
 		function addToMapping(entries){
 			if(!entries.length)return;
 			const current=parseMapping();
 			let changed=false;
 			entries.forEach(({emoji,ip})=>{
-				if(emoji&&ip&&!current[emoji]){current[emoji]=ip;changed=true;}
+				if(!emoji||!ip)return;
+				if(current[emoji]){
+					const existing=current[emoji].split(',').map(s=>s.trim());
+					if(!existing.includes(ip)){current[emoji]+=','+ip;changed=true;}
+				}else{current[emoji]=ip;changed=true;}
 			});
 			if(!changed)return;
 			mapEl.value=Object.entries(current).map(([k,v])=>k+'='+v).join('\\n');
