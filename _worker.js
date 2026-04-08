@@ -269,33 +269,64 @@ export default {
 									await 生成随机IP(request, config_JSON.优选订阅生成.本地IP库.随机数量, config_JSON.优选订阅生成.本地IP库.指定端口, (协议类型 === 'ss' ? config_JSON.SS.TLS : true))
 								)[0];
 								const 优选API = [], 优选IP = [], 其他节点 = [];
-								for (const 元素 of 完整优选列表) {
+								// 记录每个元素的原始位置和类型，用于保持列表顺序
+								const 有序条目 = []; // [{type:'ip'|'api'|'link', index, value}]
+								for (let _i = 0; _i < 完整优选列表.length; _i++) {
+									const 元素 = 完整优选列表[_i];
 									if (元素.toLowerCase().startsWith('sub://')) {
+										有序条目.push({type:'api', index:_i, value:元素});
 										优选API.push(元素);
 									} else {
 										const subMatch = 元素.match(/sub\s*=\s*([^\s&#]+)/i);
 										if (subMatch && subMatch[1].trim().includes('.')) {
 											const 优选IP作为反代IP = 元素.toLowerCase().includes('proxyip=true');
-											if (优选IP作为反代IP) 优选API.push('sub://' + subMatch[1].trim() + "?proxyip=true" + (元素.includes('#') ? ('#' + 元素.split('#')[1]) : ''));
-											else 优选API.push('sub://' + subMatch[1].trim() + (元素.includes('#') ? ('#' + 元素.split('#')[1]) : ''));
+											const apiEntry = 优选IP作为反代IP ? 'sub://' + subMatch[1].trim() + "?proxyip=true" + (元素.includes('#') ? ('#' + 元素.split('#')[1]) : '') : 'sub://' + subMatch[1].trim() + (元素.includes('#') ? ('#' + 元素.split('#')[1]) : '');
+											有序条目.push({type:'api', index:_i, value:apiEntry});
+											优选API.push(apiEntry);
 										} else if (元素.toLowerCase().startsWith('https://')) {
+											有序条目.push({type:'api', index:_i, value:元素});
 											优选API.push(元素);
 										} else if (元素.toLowerCase().includes('://')) {
-											if (元素.includes('#')) {
-												const 地址备注分离 = 元素.split('#');
-												其他节点.push(地址备注分离[0] + '#' + encodeURIComponent(decodeURIComponent(地址备注分离[1])));
-											} else 其他节点.push(元素);
+											const linkValue = 元素.includes('#') ? 元素.split('#')[0] + '#' + encodeURIComponent(decodeURIComponent(元素.split('#')[1])) : 元素;
+											有序条目.push({type:'link', index:_i, value:linkValue});
+											其他节点.push(linkValue);
 										} else {
+											有序条目.push({type:'ip', index:_i, value:元素});
 											优选IP.push(元素);
 										}
 									}
 								}
 								const 请求优选API内容 = await 请求优选API(优选API, (协议类型 === 'ss' && !config_JSON.SS.TLS) ? '80' : '443');
-								const 合并其他节点数组 = [...new Set(其他节点.concat(请求优选API内容[1]))];
-								其他节点LINK = 合并其他节点数组.length > 0 ? 合并其他节点数组.join('\n') + '\n' : '';
 								const 优选API的IP = 请求优选API内容[0];
 								反代IP池 = 请求优选API内容[3] || [];
-								完整优选IP = [...new Set(优选IP.concat(优选API的IP))];
+								// 构建API结果映射：将API返回的IP按来源分配回原始位置
+								const API返回的其他节点 = 请求优选API内容[1] || [];
+								const 合并其他节点数组 = [...new Set(其他节点.concat(API返回的其他节点))];
+								其他节点LINK = 合并其他节点数组.length > 0 ? 合并其他节点数组.join('\n') + '\n' : '';
+								// 按排序方式构建最终列表
+								const 排序方式 = config_JSON.优选订阅生成.节点排序 || 'original';
+								if (排序方式 === 'original') {
+									// 保持原始列表顺序：本地IP按位置, API的IP追加到末尾
+									完整优选IP = [...new Set(优选IP.concat(优选API的IP))];
+								} else if (排序方式 === 'country') {
+									// 按国家分组排序
+									const allIPs = [...new Set(优选IP.concat(优选API的IP))];
+									const 国家组 = {};
+									const 无国家组 = [];
+									allIPs.forEach(addr => {
+										const remarkMatch = addr.match(/#(.+)$/);
+										const remark = remarkMatch ? remarkMatch[1] : '';
+										const flagMatch = remark.match(/[\u{1F1E0}-\u{1F1FF}]{2}/u);
+										const key = flagMatch ? flagMatch[0] : '';
+										if (key) {
+											if (!国家组[key]) 国家组[key] = [];
+											国家组[key].push(addr);
+										} else 无国家组.push(addr);
+									});
+									完整优选IP = Object.values(国家组).flat().concat(无国家组);
+								} else {
+									完整优选IP = [...new Set(优选IP.concat(优选API的IP))];
+								}
 							} else { // 优选订阅生成器
 								let 优选订阅生成器HOST = url.searchParams.get('sub') || config_JSON.优选订阅生成.SUB;
 								const [优选生成器IP数组, 优选生成器其他节点] = await 获取优选订阅生成器数据(优选订阅生成器HOST);
@@ -2619,6 +2650,7 @@ async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重�
 		Fingerprint: "chrome",
 		优选订阅生成: {
 			local: true, // true: 基于本地的优选地址  false: 优选订阅生成器
+			节点排序: 'original', // original: 按列表顺序, country: 按国家分组
 			自用反代: { 启用: false, 关键词: ['反代', '🔁'], 国家映射: {} },
 			本地IP库: {
 				随机IP: true, // 当 随机IP 为true时生效，启用随机IP的数量，否则使用KV内的ADD.txt
@@ -2701,6 +2733,7 @@ async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重�
 		config_JSON.优选订阅生成.自用反代 = { 启用: legacy, 关键词: ['反代', '🔁'], 国家映射: {} };
 	}
 	if (!config_JSON.优选订阅生成.自用反代.国家映射) config_JSON.优选订阅生成.自用反代.国家映射 = {};
+	if (!config_JSON.优选订阅生成.节点排序) config_JSON.优选订阅生成.节点排序 = 'original';
 	if (env.SELF_PROXY) config_JSON.优选订阅生成.自用反代.启用 = ['1', 'true'].includes(env.SELF_PROXY.toLowerCase());
 
 	if (env.PATH) config_JSON.PATH = env.PATH.startsWith('/') ? env.PATH : '/' + env.PATH;
@@ -2979,6 +3012,18 @@ function 注入自定义UI(response) {
 			return true;
 		}
 		if(!setupHook()){const hi=setInterval(()=>{if(setupHook())clearInterval(hi);},1000);}
+		// 注入节点排序选项到「优选订阅生成」模块
+		const ipModeEl=document.querySelector('#ipMode');
+		if(ipModeEl&&!document.querySelector('#spSortMode')){
+			const sortMode=cfg.优选订阅生成?.节点排序||'original';
+			const sortRow=document.createElement('div');
+			sortRow.className='form-group';
+			sortRow.innerHTML='<label for="spSortMode">节点排序</label><div class="input-wrapper"><select id="spSortMode" style="padding-left:16px;" title="控制订阅中节点的排列顺序"><option value="original"'+(sortMode==='original'?' selected':'')+'>按列表顺序</option><option value="country"'+(sortMode==='country'?' selected':'')+'>按国家分组</option></select></div>';
+			ipModeEl.closest('.form-group').after(sortRow);
+			document.querySelector('#spSortMode').addEventListener('change',function(){
+				save(s=>{cfg.优选订阅生成.节点排序=this.value;});
+			});
+		}
 	}
 	function tryInit(){
 		if(document.querySelector('#spToggle'))return;
