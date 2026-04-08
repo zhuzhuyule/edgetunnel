@@ -338,9 +338,18 @@ export default {
 									}
 								}
 								if (!已匹配反代 && config_JSON.优选订阅生成.自用反代?.启用) {
-									const 自用反代关键词 = config_JSON.优选订阅生成.自用反代.关键词 || [];
-									if (自用反代关键词.length === 0 || 自用反代关键词.some(kw => 节点备注.includes(kw))) {
-										完整节点路径 = (`${config_JSON.PATH}/proxyip=${节点地址}`).replace(/\/\//g, '/') + (config_JSON.启用0RTT ? '?ed=2560' : '');
+									const 国家映射 = config_JSON.优选订阅生成.自用反代.国家映射 || {};
+									let 映射反代IP = null;
+									for (const [标识, 反代地址] of Object.entries(国家映射)) {
+										if (标识 && 节点备注.includes(标识)) { 映射反代IP = 反代地址; break; }
+									}
+									if (映射反代IP) {
+										完整节点路径 = (`${config_JSON.PATH}/proxyip=${映射反代IP}`).replace(/\/\//g, '/') + (config_JSON.启用0RTT ? '?ed=2560' : '');
+									} else {
+										const 自用反代关键词 = config_JSON.优选订阅生成.自用反代.关键词 || [];
+										if (自用反代关键词.length === 0 || 自用反代关键词.some(kw => 节点备注.includes(kw))) {
+											完整节点路径 = (`${config_JSON.PATH}/proxyip=${节点地址}`).replace(/\/\//g, '/') + (config_JSON.启用0RTT ? '?ed=2560' : '');
+										}
 									}
 								}
 								if (isLoonOrSurge) 完整节点路径 = 完整节点路径.replace(/,/g, '%2C');
@@ -2608,7 +2617,7 @@ async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重�
 		Fingerprint: "chrome",
 		优选订阅生成: {
 			local: true, // true: 基于本地的优选地址  false: 优选订阅生成器
-			自用反代: { 启用: false, 关键词: ['反代', '🔁'] },
+			自用反代: { 启用: false, 关键词: ['反代', '🔁'], 国家映射: {} },
 			本地IP库: {
 				随机IP: true, // 当 随机IP 为true时生效，启用随机IP的数量，否则使用KV内的ADD.txt
 				随机数量: 16,
@@ -2687,8 +2696,9 @@ async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重�
 	if (!config_JSON.启用0RTT) config_JSON.启用0RTT = false;
 	if (!config_JSON.优选订阅生成.自用反代 || typeof config_JSON.优选订阅生成.自用反代 !== 'object') {
 		const legacy = config_JSON.优选订阅生成.自用反代 === true;
-		config_JSON.优选订阅生成.自用反代 = { 启用: legacy, 关键词: ['反代', '🔁'] };
+		config_JSON.优选订阅生成.自用反代 = { 启用: legacy, 关键词: ['反代', '🔁'], 国家映射: {} };
 	}
+	if (!config_JSON.优选订阅生成.自用反代.国家映射) config_JSON.优选订阅生成.自用反代.国家映射 = {};
 	if (env.SELF_PROXY) config_JSON.优选订阅生成.自用反代.启用 = ['1', 'true'].includes(env.SELF_PROXY.toLowerCase());
 
 	if (env.PATH) config_JSON.PATH = env.PATH.startsWith('/') ? env.PATH : '/' + env.PATH;
@@ -2857,6 +2867,8 @@ function 注入自定义UI(response) {
 		const sp=cfg.优选订阅生成?.[SECTION]||{};
 		const on=sp[F_ON]===true;
 		const kw=(sp[F_KW]||['反代','🔁']).join(', ');
+		const mapping=sp['国家映射']||{};
+		const mapStr=Object.entries(mapping).map(([k,v])=>k+'='+v).join('\\n');
 		// 第一行: 开关
 		const row1=document.createElement('div');
 		row1.className='form-group';
@@ -2866,19 +2878,42 @@ function 注入自定义UI(response) {
 		row2.className='form-group';
 		row2.id='spKwRow';
 		row2.style.display=on?'':'none';
-		row2.innerHTML='<label for="spKeywords">反代关键词</label><div class="input-wrapper"><input type="text" id="spKeywords" value="'+kw.replace(/"/g,'&quot;')+'" placeholder="反代, 🔁, proxy" title="节点备注包含这些关键词时启用, 逗号分隔"></div>';
-		// 插入到 module-content 最前面
+		row2.innerHTML='<label for="spKeywords">反代关键词</label><div class="input-wrapper"><input type="text" id="spKeywords" value="'+kw.replace(/"/g,'&quot;')+'" placeholder="反代, 🔁, proxy" title="节点备注包含这些关键词时启用自用反代, 逗号分隔"></div>';
+		// 第三行: 国家映射
+		const row3=document.createElement('div');
+		row3.className='form-group';
+		row3.id='spMapRow';
+		row3.style.display=on?'':'none';
+		row3.style.alignItems='start';
+		row3.innerHTML='<label for="spMapping" style="padding-top:8px;">国家反代映射</label><div class="input-wrapper" style="flex-direction:column;align-items:stretch;gap:4px;"><textarea id="spMapping" rows="4" placeholder="🇯🇵=89.185.25.124\\n🇸🇬=13.251.157.143\\n🇺🇸=38.165.23.211" title="每行一条: 国家标识=ProxyIP\\n节点备注包含该标识时使用指定ProxyIP作出口\\n优先级高于关键词自用反代" style="width:100%;padding:8px;border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;">'+mapStr.replace(/</g,'&lt;')+'</textarea><div style="font-size:12px;color:#9ca3af;">每行格式: <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px;">标识=ProxyIP</code>，标识匹配节点备注，优先级高于关键词</div></div>';
+		// 插入到 module-content 最前面 (倒序插入)
+		moduleContent.insertBefore(row3,moduleContent.firstChild);
 		moduleContent.insertBefore(row2,moduleContent.firstChild);
 		moduleContent.insertBefore(row1,moduleContent.firstChild);
 		// 事件
+		function toggleDetails(on){
+			document.querySelector('#spKwRow').style.display=on?'':'none';
+			document.querySelector('#spMapRow').style.display=on?'':'none';
+		}
 		document.querySelector('#spToggle').addEventListener('change',function(){
-			document.querySelector('#spKwRow').style.display=this.checked?'':'none';
+			toggleDetails(this.checked);
 			save(s=>{s[F_ON]=this.checked;});
 		});
-		let t=null;
+		let kwT=null;
 		document.querySelector('#spKeywords').addEventListener('input',function(){
-			clearTimeout(t);t=setTimeout(()=>{
+			clearTimeout(kwT);kwT=setTimeout(()=>{
 				save(s=>{s[F_KW]=this.value.split(/[,，]/).map(v=>v.trim()).filter(Boolean);});
+			},800);
+		});
+		let mapT=null;
+		document.querySelector('#spMapping').addEventListener('input',function(){
+			clearTimeout(mapT);mapT=setTimeout(()=>{
+				const m={};
+				this.value.split('\\n').forEach(line=>{
+					const idx=line.indexOf('=');
+					if(idx>0){const k=line.slice(0,idx).trim(),v=line.slice(idx+1).trim();if(k&&v)m[k]=v;}
+				});
+				save(s=>{s['国家映射']=m;});
 			},800);
 		});
 	}
