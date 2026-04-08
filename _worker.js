@@ -2928,39 +2928,45 @@ function 注入自定义UI(response) {
 			});
 			return m;
 		}
-		// Hook "获取更多 PROXYIP" 弹窗的确认按钮
-		const hookConfirmBtn=()=>{
-			const btn=document.querySelector('#proxyIPConfirmBtn');
-			if(!btn||btn.dataset.spHooked)return;
-			btn.dataset.spHooked='1';
-			btn.addEventListener('click',()=>{
-				setTimeout(()=>{
-					const ips=window.selectedProxyIPs||[];
-					const list=window.proxyIPListData||[];
-					if(!ips.length||!list.length)return;
-					const current=parseMapping();
-					let changed=false;
-					ips.forEach(ip=>{
-						const data=list.find(p=>p.ip===ip);
-						if(!data)return;
-						const emoji=data.country_emoji||'';
-						if(!emoji)return;
-						if(!current[emoji]){current[emoji]=ip;changed=true;}
-					});
-					if(changed){
-						mapEl.value=Object.entries(current).map(([k,v])=>k+'='+v).join('\\n');
-						save(s=>{s['国家映射']=current;});
-						// 确保开关已打开且映射区可见
-						const tog=document.querySelector('#spToggle');
-						if(tog&&!tog.checked){tog.checked=true;toggleDetails(true);save(s=>{s[F_ON]=true;});}
-					}
-				},200);
+		// 从已选标签DOM中读取 emoji+IP (标签格式: <span>🇯🇵 1.2.3.4</span><span>×</span>)
+		function readSelectedTags(){
+			const entries=[];
+			document.querySelectorAll('#selectedProxyIPsContainer > div').forEach(tag=>{
+				const span=tag.querySelector('span');
+				if(!span)return;
+				const txt=span.textContent.trim();
+				const m=txt.match(/^([^\\s\\d][^\\s]*)\\s+([\\d.]+)/);
+				if(m)entries.push({emoji:m[1],ip:m[2]});
 			});
-		};
-		// 持续检测按钮出现(弹窗是动态加载的)
-		const hookObserver=new MutationObserver(hookConfirmBtn);
-		hookObserver.observe(document.body,{childList:true,subtree:true});
-		hookConfirmBtn();
+			return entries;
+		}
+		// 将 emoji+IP 列表写入国家映射
+		function addToMapping(entries){
+			if(!entries.length)return;
+			const current=parseMapping();
+			let changed=false;
+			entries.forEach(({emoji,ip})=>{
+				if(emoji&&ip&&!current[emoji]){current[emoji]=ip;changed=true;}
+			});
+			if(!changed)return;
+			mapEl.value=Object.entries(current).map(([k,v])=>k+'='+v).join('\\n');
+			save(s=>{s['国家映射']=current;});
+			const tog=document.querySelector('#spToggle');
+			if(tog&&!tog.checked){tog.checked=true;toggleDetails(true);save(s=>{s[F_ON]=true;});}
+		}
+		// Override confirmSelectProxyIP: 在原函数关闭弹窗前读取DOM
+		function setupHook(){
+			if(typeof window.confirmSelectProxyIP!=='function'||window.confirmSelectProxyIP._sp)return false;
+			const orig=window.confirmSelectProxyIP;
+			window.confirmSelectProxyIP=function(){
+				const entries=readSelectedTags();
+				orig.apply(this,arguments);
+				addToMapping(entries);
+			};
+			window.confirmSelectProxyIP._sp=true;
+			return true;
+		}
+		if(!setupHook()){const hi=setInterval(()=>{if(setupHook())clearInterval(hi);},1000);}
 	}
 	function tryInit(){
 		if(document.querySelector('#spToggle'))return;
