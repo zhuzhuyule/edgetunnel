@@ -2874,24 +2874,32 @@ function 注入自定义UI(response) {
 		// 第一行: 开关
 		const row1=document.createElement('div');
 		row1.className='form-group';
-		row1.innerHTML='<label>入口自用反代</label><div class="input-wrapper"><div class="checkbox-group"><input type="checkbox" id="spToggle" '+(on?'checked':'')+' title="匹配关键词的优选节点自动以自身IP作为ProxyIP出口"><label for="spToggle" class="checkbox-label">启用入口自用反代</label></div><span id="spSaved" style="font-size:12px;color:#f6821f;opacity:0;transition:opacity .3s;white-space:nowrap;">✓ 已保存</span></div>';
-		// 第二行: 关键词
+		row1.innerHTML='<label>智能反代出口</label><div class="input-wrapper"><div class="checkbox-group"><input type="checkbox" id="spToggle" '+(on?'checked':'')+' title="根据节点标识自动匹配对应国家的反代出口，确保入口和出口在同一地区"><label for="spToggle" class="checkbox-label">启用国家自匹配反代</label></div><span id="spSaved" style="font-size:12px;color:#f6821f;opacity:0;transition:opacity .3s;white-space:nowrap;">✓ 已保存</span></div>';
+		// 第二行: 自用反代关键词
 		const row2=document.createElement('div');
 		row2.className='form-group';
 		row2.id='spKwRow';
 		row2.style.display=on?'':'none';
-		row2.innerHTML='<label for="spKeywords">反代关键词</label><div class="input-wrapper"><input type="text" id="spKeywords" value="'+kw.replace(/"/g,'&quot;')+'" placeholder="反代, 🔁, proxy" title="节点备注包含这些关键词时启用自用反代, 逗号分隔"></div>';
+		row2.innerHTML='<label for="spKeywords">自身反代标记</label><div class="input-wrapper" style="flex-direction:column;align-items:stretch;gap:4px;"><input type="text" id="spKeywords" value="'+kw.replace(/"/g,'&quot;')+'" placeholder="反代, 🔁, proxy" title="逗号分隔"><div style="font-size:12px;color:#9ca3af;">含标记的节点直接用自身IP做反代出口（优先级最高）</div></div>';
 		// 第三行: 国家映射
 		const row3=document.createElement('div');
 		row3.className='form-group';
 		row3.id='spMapRow';
 		row3.style.display=on?'':'none';
 		row3.style.alignItems='start';
-		row3.innerHTML='<label for="spMapping" style="padding-top:8px;">国家反代映射</label><div class="input-wrapper" style="flex-direction:column;align-items:stretch;gap:4px;"><textarea id="spMapping" rows="4" placeholder="🇯🇵=89.185.25.124\\n🇸🇬=13.251.157.143\\n🇺🇸=38.165.23.211" title="每行一条: 国家标识=ProxyIP\\n节点备注包含该标识时使用指定ProxyIP作出口\\n优先级高于关键词自用反代" style="width:100%;padding:8px;border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;">'+mapStr.replace(/</g,'&lt;')+'</textarea><div style="font-size:12px;color:#9ca3af;">每行格式: <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px;">标识=ProxyIP</code>，标识匹配节点备注，优先级高于关键词</div></div>';
+		row3.innerHTML='<label for="spMapping" style="padding-top:8px;">国家反代映射</label><div class="input-wrapper" style="flex-direction:column;align-items:stretch;gap:4px;"><textarea id="spMapping" rows="4" placeholder="🇯🇵=89.185.25.124\\n🇸🇬=13.251.157.143\\n🇺🇸=38.165.23.211" title="每行一条: 国家标识=ProxyIP" style="width:100%;padding:8px;border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;">'+mapStr.replace(/</g,'&lt;')+'</textarea><div style="font-size:12px;color:#9ca3af;">按国家指定固定出口，可通过下方「获取更多 PROXYIP」自动添加</div></div>';
 		// 插入到 module-content 最前面 (倒序插入)
 		moduleContent.insertBefore(row3,moduleContent.firstChild);
 		moduleContent.insertBefore(row2,moduleContent.firstChild);
 		moduleContent.insertBefore(row1,moduleContent.firstChild);
+		// 给原有 PROXYIP 输入框添加行为说明
+		const proxyIPLabel=proxyIPSec.querySelector('label[for="proxyIP"]');
+		if(proxyIPLabel){
+			const note=document.createElement('div');
+			note.style.cssText='font-size:11px;color:#9ca3af;font-weight:normal;margin-top:2px;';
+			note.textContent='兜底出口，未命中上方规则时随机轮询使用';
+			proxyIPLabel.appendChild(note);
+		}
 		// 事件
 		function toggleDetails(on){
 			document.querySelector('#spKwRow').style.display=on?'':'none';
