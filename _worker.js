@@ -337,8 +337,11 @@ export default {
 										已匹配反代 = true;
 									}
 								}
-								if (config_JSON.优选订阅生成.自用反代 && !已匹配反代) {
-									完整节点路径 = (`${config_JSON.PATH}/proxyip=${节点地址}`).replace(/\/\//g, '/') + (config_JSON.启用0RTT ? '?ed=2560' : '');
+								if (!已匹配反代 && config_JSON.优选订阅生成.自用反代?.启用) {
+									const 自用反代关键词 = config_JSON.优选订阅生成.自用反代.关键词 || [];
+									if (自用反代关键词.length === 0 || 自用反代关键词.some(kw => 节点备注.includes(kw))) {
+										完整节点路径 = (`${config_JSON.PATH}/proxyip=${节点地址}`).replace(/\/\//g, '/') + (config_JSON.启用0RTT ? '?ed=2560' : '');
+									}
 								}
 								if (isLoonOrSurge) 完整节点路径 = 完整节点路径.replace(/,/g, '%2C');
 
@@ -2605,7 +2608,7 @@ async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重�
 		Fingerprint: "chrome",
 		优选订阅生成: {
 			local: true, // true: 基于本地的优选地址  false: 优选订阅生成器
-			自用反代: false, // true: 每个入口节点自动以自身IP作为ProxyIP出口
+			自用反代: { 启用: false, 关键词: ['反代', '🔁'] },
 			本地IP库: {
 				随机IP: true, // 当 随机IP 为true时生效，启用随机IP的数量，否则使用KV内的ADD.txt
 				随机数量: 16,
@@ -2682,8 +2685,11 @@ async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重�
 	config_JSON.UUID = userID;
 	if (!config_JSON.随机路径) config_JSON.随机路径 = false;
 	if (!config_JSON.启用0RTT) config_JSON.启用0RTT = false;
-	if (!config_JSON.优选订阅生成.自用反代) config_JSON.优选订阅生成.自用反代 = false;
-	if (env.SELF_PROXY) config_JSON.优选订阅生成.自用反代 = ['1', 'true'].includes(env.SELF_PROXY.toLowerCase());
+	if (!config_JSON.优选订阅生成.自用反代 || typeof config_JSON.优选订阅生成.自用反代 !== 'object') {
+		const legacy = config_JSON.优选订阅生成.自用反代 === true;
+		config_JSON.优选订阅生成.自用反代 = { 启用: legacy, 关键词: ['反代', '🔁'] };
+	}
+	if (env.SELF_PROXY) config_JSON.优选订阅生成.自用反代.启用 = ['1', 'true'].includes(env.SELF_PROXY.toLowerCase());
 
 	if (env.PATH) config_JSON.PATH = env.PATH.startsWith('/') ? env.PATH : '/' + env.PATH;
 	else if (!config_JSON.PATH) config_JSON.PATH = '/';
@@ -2825,46 +2831,105 @@ function 注入自定义UI(response) {
 	if (!contentType.includes('text/html')) return response;
 	const script = `<script>
 (function(){
-	const FIELD='自用反代';
-	let cfgCache=null;
+	const SECTION='自用反代', F_ENABLE='启用', F_KEYWORDS='关键词';
+	let cfgCache=null, saving=false;
 	async function loadConfig(){
 		if(cfgCache)return cfgCache;
 		try{const r=await fetch('/admin/config.json');cfgCache=await r.json();return cfgCache;}catch(e){return null;}
 	}
-	async function saveConfig(cfg){
-		cfgCache=cfg;
-		await fetch('/admin/config.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});
+	async function saveField(updater){
+		if(saving)return; saving=true;
+		try{
+			const c=await loadConfig();if(!c)return;
+			if(!c.优选订阅生成)c.优选订阅生成={};
+			if(!c.优选订阅生成[SECTION]||typeof c.优选订阅生成[SECTION]!=='object')c.优选订阅生成[SECTION]={启用:false,关键词:['反代','🔁']};
+			updater(c.优选订阅生成[SECTION]);
+			cfgCache=c;
+			await fetch('/admin/config.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)});
+			showStatus('已保存');
+		}catch(e){showStatus('保存失败');}finally{saving=false;}
+	}
+	function showStatus(msg){
+		const el=document.querySelector('#sp-status');
+		if(el){el.textContent=msg;el.style.opacity='1';setTimeout(()=>{el.style.opacity='0';},1500);}
 	}
 	async function init(){
-		const cfg=await loadConfig();
-		if(!cfg)return;
-		const checked=cfg.优选订阅生成?.[FIELD]===true;
-		const bar=document.createElement('div');
-		bar.id='self-proxy-bar';
-		bar.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 -2px 10px rgba(0,0,0,0.3);font-size:14px;';
-		bar.innerHTML=\`
-			<span style="opacity:0.7;">🔀 反代出口设置</span>
-			<label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:rgba(255,255,255,0.1);padding:6px 14px;border-radius:20px;">
-				<input id="self-proxy-toggle" type="checkbox" \${checked?'checked':''} style="width:16px;height:16px;cursor:pointer;accent-color:#4ade80;">
-				<span>优先使用入口节点作为反代出口</span>
-			</label>
-			<span id="self-proxy-status" style="font-size:12px;opacity:0.6;">\${checked?'已启用':'已关闭'}</span>
-			<button id="self-proxy-close" style="position:absolute;right:10px;background:none;border:none;color:#fff;opacity:0.5;cursor:pointer;font-size:16px;">✕</button>
-		\`;
-		document.body.style.paddingBottom='50px';
-		document.body.appendChild(bar);
-		bar.querySelector('#self-proxy-toggle').addEventListener('change',async function(){
-			const c=await loadConfig();
-			if(!c)return;
-			if(!c.优选订阅生成)c.优选订阅生成={};
-			c.优选订阅生成[FIELD]=this.checked;
-			await saveConfig(c);
-			bar.querySelector('#self-proxy-status').textContent=this.checked?'已启用 ✓':'已关闭';
+		const cfg=await loadConfig();if(!cfg)return;
+		const selfProxy=cfg.优选订阅生成?.[SECTION]||{};
+		const enabled=selfProxy[F_ENABLE]===true;
+		const keywords=(selfProxy[F_KEYWORDS]||['反代','🔁']).join(', ');
+		// 找到页面主内容区域
+		const main=document.querySelector('main')||document.querySelector('[class*="content"]')||document.querySelector('[class*="container"]')||document.querySelector('#app')||document.body;
+		const card=document.createElement('div');
+		card.id='self-proxy-card';
+		card.style.cssText='max-width:800px;margin:16px auto;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);border:1px solid #e5e7eb;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,sans-serif;';
+		card.innerHTML=\`
+<div style="padding:16px 20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;">
+	<span style="font-size:18px;">🔀</span>
+	<span style="font-weight:600;font-size:15px;color:#1f2937;">自用反代出口</span>
+	<span id="sp-status" style="margin-left:auto;font-size:12px;color:#10b981;opacity:0;transition:opacity 0.3s;"></span>
+</div>
+<div style="padding:16px 20px;">
+	<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+		<div>
+			<div style="font-size:14px;color:#374151;font-weight:500;">优先使用入口节点作为反代出口</div>
+			<div style="font-size:12px;color:#9ca3af;margin-top:2px;">匹配关键词的优选节点将自动以自身IP作为ProxyIP</div>
+		</div>
+		<label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;">
+			<input id="sp-toggle" type="checkbox" \${enabled?'checked':''} style="opacity:0;width:0;height:0;">
+			<span id="sp-slider" style="position:absolute;inset:0;background:\${enabled?'#10b981':'#d1d5db'};border-radius:24px;transition:0.2s;"></span>
+			<span id="sp-dot" style="position:absolute;top:2px;left:\${enabled?'22px':'2px'};width:20px;height:20px;background:#fff;border-radius:50%;transition:0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></span>
+		</label>
+	</div>
+	<div id="sp-keywords-section" style="display:\${enabled?'block':'none'};">
+		<div style="font-size:13px;color:#6b7280;margin-bottom:6px;">识别关键词 <span style="color:#9ca3af;">(节点备注中包含以下关键词时启用反代，用逗号分隔)</span></div>
+		<div style="display:flex;gap:8px;align-items:center;">
+			<input id="sp-keywords" type="text" value="\${keywords}" placeholder="反代, 🔁, proxy" style="flex:1;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#10b981'" onblur="this.style.borderColor='#d1d5db'">
+			<button id="sp-save-kw" style="padding:8px 16px;background:#10b981;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">保存关键词</button>
+		</div>
+		<div style="margin-top:8px;font-size:12px;color:#9ca3af;">
+			示例：节点 <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px;">160.191.40.242:443#🇯🇵 JP-02 🔁 | 81ms</code> 匹配关键词 <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px;">🔁</code> → 自动加入 proxyip=160.191.40.242
+		</div>
+	</div>
+</div>\`;
+		// 插入到页面中 - 尝试找到合适的位置
+		const sections=main.querySelectorAll('section,[class*="card"],[class*="panel"],[class*="block"]');
+		if(sections.length>0){
+			const last=sections[sections.length-1];
+			last.parentNode.insertBefore(card,last.nextSibling);
+		}else{
+			main.appendChild(card);
+		}
+		// 事件绑定
+		const toggle=card.querySelector('#sp-toggle');
+		const slider=card.querySelector('#sp-slider');
+		const dot=card.querySelector('#sp-dot');
+		const kwSection=card.querySelector('#sp-keywords-section');
+		toggle.addEventListener('change',function(){
+			const on=this.checked;
+			slider.style.background=on?'#10b981':'#d1d5db';
+			dot.style.left=on?'22px':'2px';
+			kwSection.style.display=on?'block':'none';
+			saveField(s=>{s[F_ENABLE]=on;});
 		});
-		bar.querySelector('#self-proxy-close').addEventListener('click',()=>{bar.remove();document.body.style.paddingBottom='';});
+		card.querySelector('#sp-save-kw').addEventListener('click',function(){
+			const raw=card.querySelector('#sp-keywords').value;
+			const kws=raw.split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+			saveField(s=>{s[F_KEYWORDS]=kws;});
+		});
+		card.querySelector('#sp-keywords').addEventListener('keydown',function(e){
+			if(e.key==='Enter'){e.preventDefault();card.querySelector('#sp-save-kw').click();}
+		});
 	}
-	if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
-	else init();
+	// 等待页面渲染完成后注入
+	function tryInit(){
+		if(document.querySelector('#self-proxy-card'))return;
+		const main=document.querySelector('main')||document.querySelector('[class*="content"]')||document.querySelector('[class*="container"]')||document.querySelector('#app');
+		if(main&&main.children.length>0)init();
+		else setTimeout(tryInit,500);
+	}
+	if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(tryInit,800));
+	else setTimeout(tryInit,800);
 })();
 <\/script>`;
 	return new HTMLRewriter().on('body', {
