@@ -1,0 +1,66 @@
+name: Sync Main To Deploy
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  sync_to_deploy:
+    name: Merge main into deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout deploy branch
+        run: |
+          if git ls-remote --exit-code --heads origin deploy; then
+            git fetch origin deploy
+            git checkout deploy
+            git reset --hard origin/deploy
+          else
+            echo "deploy branch does not exist on remote — skipping"
+            exit 0
+          fi
+
+      - name: Merge main into deploy
+        run: |
+          git fetch origin main
+
+          # Attempt merge; on conflict, keep deploy's wrangler.toml
+          if git merge --no-ff origin/main -m "chore: sync upstream changes from main"; then
+            echo "Merge succeeded cleanly"
+          else
+            echo "Merge conflict detected — resolving deploy-owned files"
+
+            # Preserve deploy branch's wrangler.toml
+            if git diff --name-only --diff-filter=U | grep -q '^wrangler.toml$'; then
+              git checkout --ours wrangler.toml
+              git add wrangler.toml
+            fi
+
+            # If there are still unresolved conflicts, fail loudly
+            if git diff --name-only --diff-filter=U | grep -q .; then
+              echo "::error::Unresolved merge conflicts remain:"
+              git diff --name-only --diff-filter=U
+              exit 1
+            fi
+
+            git -c core.editor=true merge --continue
+          fi
+
+      - name: Push deploy branch
+        run: git push origin deploy
