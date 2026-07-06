@@ -27,7 +27,7 @@ jobs:
           upstream_sync_repo: cmliu/edgetunnel
           upstream_sync_branch: main
           target_sync_branch: main
-          target_repo_token: ${{ secrets.GITHUB_TOKEN }} # automatically generated, no need to set
+          target_repo_token: ${{ secrets.SYNC_PAT }} # PAT with 'workflow' scope — GITHUB_TOKEN can't push workflow file changes
 
           # Set test_mode true to run tests instead of the true action!!
           test_mode: false
