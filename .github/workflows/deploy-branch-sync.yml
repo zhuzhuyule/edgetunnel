@@ -40,8 +40,8 @@ jobs:
         run: |
           git fetch origin main
 
-          # Attempt merge; on conflict, keep deploy's wrangler.toml
-          if git merge --no-ff origin/main -m "chore: sync upstream changes from main"; then
+          # Prefer main for shared files; deploy keeps its own wrangler.toml.
+          if git merge --no-ff -X theirs origin/main -m "chore: sync upstream changes from main"; then
             echo "Merge succeeded cleanly"
           else
             echo "Merge conflict detected — resolving deploy-owned files"
