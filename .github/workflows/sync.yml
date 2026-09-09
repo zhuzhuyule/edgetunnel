@@ -37,9 +37,16 @@ jobs:
           else
             # 有本地修改，保持原来的合并方式，不覆盖任何人的改动
             if ! git pull --no-rebase upstream main; then
-              echo "[Error] 合并上游变更产生冲突，自动同步已暂停，请手动 Sync Fork 并解决冲突。"
-              echo "[Error] Merge conflict detected while syncing upstream. Please sync your fork manually and resolve the conflicts."
-              exit 1
+              # 该 workflow 由 fork 自己维护，保留本地版本；其它冲突仍需人工处理
+              if git diff --name-only --diff-filter=U | grep -qx '.github/workflows/sync.yml' && [ "$(git diff --name-only --diff-filter=U | wc -l | tr -d ' ')" = "1" ]; then
+                git checkout --ours .github/workflows/sync.yml
+                git add .github/workflows/sync.yml
+                git -c core.editor=true merge --continue
+              else
+                echo "[Error] 合并上游变更产生冲突，自动同步已暂停，请手动 Sync Fork 并解决冲突。"
+                echo "[Error] Merge conflict detected while syncing upstream. Please sync your fork manually and resolve the conflicts."
+                exit 1
+              fi
             fi
             git push origin main
           fi
