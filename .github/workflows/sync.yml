@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: main
-          token: ${{ secrets.SYNC_PAT }}
+          token: ${{ secrets.SYNC_PAT || github.token }}
 
       - name: Sync upstream changes
         run: |
