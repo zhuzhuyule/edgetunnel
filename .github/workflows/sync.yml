@@ -2,6 +2,7 @@ name: Upstream Sync
 
 permissions:
   contents: write
+  actions: write
 
 on:
   schedule:
@@ -50,3 +51,12 @@ jobs:
             fi
             git push origin main
           fi
+
+      # main 分支的 push 由 GITHUB_TOKEN 触发时不会连带触发其它 workflow，
+      # 这里显式 dispatch，确保 deploy 分支每次同步后都能跟上。
+      - name: Trigger deploy branch sync
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT || github.token }}
+        run: |
+          gh workflow run deploy-branch-sync.yml --repo "$GITHUB_REPOSITORY" \
+            || echo "::warning::Failed to trigger deploy-branch-sync workflow"
