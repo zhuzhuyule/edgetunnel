@@ -1,8 +1,23 @@
 name = "v20251104"
-main = "_worker.js"
-compatibility_date = "2025-11-04"
+# tunnel-only 精简版 Worker；回退到原版请改回 main = "_worker.js"
+main = "_worker.tunnel.js"
+# 较新的稳定兼容日期：connect()(cloudflare:sockets) 与 IdentityTransformStream 均需 >= 2024-09
+compatibility_date = "2026-01-01"
 keep_vars = true
 
-#[[kv_namespaces]]
-#binding = "KV"			#KV绑定名默认不可修改
-#id = ""				#KV数据库id
+# ---- 出口配置 KV（键名由 env.EGRESS_KEY 覆盖，默认 egress.json）----
+# 需在 CF 后台创建 KV 命名空间并填入下方 id
+[[kv_namespaces]]
+binding = "KV"          # 绑定名固定为 KV（Worker 内 env.KV）
+id = ""                 # TODO: 填入 KV 命名空间 id
+
+# ---- 可选变量（在 CF 后台 Variables 配置，也可取消注释写此处）----
+# [vars]
+# EGRESS_KEY = "egress.json"   # KV 内出口档案键名
+# SUB_KEY    = ""              # /sub 订阅访问密钥（留空则不鉴权，不建议）
+# UUID       = ""              # VLESS UUID；留空则由 KEY/ADMIN 确定性派生
+# KEY        = ""              # 用于派生 UUID 的种子（无 UUID 时）
+
+# 运行时注意：CF Workers 禁止出站 TCP 到 Cloudflare IP 段。
+# 因此 type=proxy 的反代地址若指向 CF anycast/PROXYIP 可能被拒；
+# SOCKS5 出口应指向非 CF 的目标代理服务器。
