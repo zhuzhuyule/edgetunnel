@@ -389,7 +389,66 @@ function nginxPage(host) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Welcome to nginx!</title><style>body{width:60em;margin:0 auto;font-family:Tahoma,Verdana,Arial,sans-serif;background:#fff;color:#222}h1{font-size:2.4em}</style></head><body><h1>Welcome to nginx!</h1><p>If you see this page, the nginx web server is successfully installed and working.</p><p><em>${host}</em></p></body></html>`;
 }
 
-// ---- UUID 派生（无 env.UUID 时从 KEY/ADMIN 稳定派生） ----
+// ---- 测活探针（/probe）----
+// 通用探活，两种模式：
+//   direct：直连 host:port，发 HTTP /cdn-cgi/trace 读 ip/loc（测非 CF 的反代域名/服务器）
+//   socks5 ：通过 SOCKS5 代理访问 cloudflare.com，读出口 ip/loc（测 SOCKS5 出口真实落地）
+// 返回 {ok, latency, ip, loc, error}。注意：CF Workers 禁止出站到 Cloudflare IP 段，
+// 故 CF 边缘 IP 类反代节点无法在此测活（需 VPS/smart-vpngate）。
+async function httpTrace(socket, sni, timeoutMs) {
+  const writer = socket.writable.getWriter();
+  const reader = socket.readable.getReader();
+  const req = `GET /cdn-cgi/trace HTTP/1.1\r\nHost: ${sni}\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n`;
+  const readGuard = new Promise((_, rej) => setTimeout(() => rej(new Error('read-timeout')), timeoutMs));
+  try {
+    await writer.write(new TextEncoder().encode(req));
+    let buf = new Uint8Array(0);
+    const max = 64 * 1024;
+    while (buf.length < max) {
+      const { value, done } = await Promise.race([reader.read(), readGuard]);
+      if (done) break;
+      if (value && value.byteLength) { const nb = new Uint8Array(buf.length + value.byteLength); nb.set(buf); nb.set(value, buf.length); buf = nb; }
+      if (new TextDecoder().decode(buf).includes('\r\n\r\n')) break;
+    }
+    const text = new TextDecoder().decode(buf);
+    const ip = (text.match(/(?:^|\n)ip=(.*)/) || [])[1];
+    const loc = (text.match(/(?:^|\n)loc=(.*)/) || [])[1];
+    return { ip: ip ? ip.trim() : undefined, loc: loc ? loc.trim() : undefined };
+  } finally {
+    try { writer.releaseLock(); } catch (e) { }
+    try { reader.releaseLock(); } catch (e) { }
+    try { socket.close(); } catch (e) { }
+  }
+}
+
+async function probeTarget(spec) {
+  const start = Date.now();
+  const timeoutMs = Math.min(8000, Math.max(1000, Number(spec.timeout) || 5000));
+  const traceHost = spec.traceHost || 'cloudflare.com';
+  const tracePort = spec.tracePort || 80;
+  let socket = null;
+  try {
+    if (spec.type === 'socks5') {
+      const parsed = parseSocks5(spec.value);
+      socket = await socks5Connect(traceHost, tracePort, new Uint8Array(0), (o) => connect(o), parsed);
+    } else {
+      // direct：直连被探测 host:port（用于反代域名/服务器）
+      const idx = String(spec.value).lastIndexOf(':');
+      const hostname = idx > -1 ? String(spec.value).slice(0, idx) : spec.value;
+      const port = idx > -1 ? (parseInt(String(spec.value).slice(idx + 1), 10) || 443) : 443;
+      const guard = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs));
+      socket = await Promise.race([connect({ hostname, port }), guard]);
+    }
+    const latency = Date.now() - start;
+    const info = await httpTrace(socket, traceHost, timeoutMs);
+    return { ok: true, latency, ...info };
+  } catch (e) {
+    try { if (socket) socket.close(); } catch (_) { }
+    return { ok: false, latency: Date.now() - start, error: e.message || String(e) };
+  }
+}
+
+
 async function deriveUUID(env) {
   if (env.UUID && UUID_RE.test(env.UUID)) return env.UUID.toLowerCase();
   const seed = (env.KEY || env.ADMIN || 'edgetunnel') + '|tunnel-only';
@@ -416,6 +475,27 @@ export default {
     // 版本查询
     if (url.pathname.slice(1).toLowerCase() === 'version') {
       return new Response(JSON.stringify({ Version: EDT_VERSION }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+    }
+
+    // 测活探针 /probe（前端「测」按钮后端）
+    // 用法：?egress=名称        从 KV 档案测活该出口（socks5 走代理、proxy 直连域名）
+    //       或 ?type=socks5&value=账号:密码@host:port / ?type=direct&value=host:port
+    // 可选 ?key= 鉴权（设置 env.PROBE_KEY 时启用）
+    if (url.pathname.slice(1).toLowerCase() === 'probe') {
+      if (env.PROBE_KEY) {
+        const k = url.searchParams.get('key');
+        if (k !== env.PROBE_KEY) return new Response(JSON.stringify({ ok: false, error: 'forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+      }
+      let spec = { type: url.searchParams.get('type') || 'direct', value: url.searchParams.get('value') || '', timeout: url.searchParams.get('timeout') };
+      const egName = url.searchParams.get('egress');
+      if (egName) {
+        const eg = pickEgress(cfg, egName);
+        if (!eg) return new Response(JSON.stringify({ ok: false, error: 'egress not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        spec = { type: eg.type === 'socks5' ? 'socks5' : 'direct', value: eg.value, timeout: url.searchParams.get('timeout') };
+      }
+      if (!spec.value) return new Response(JSON.stringify({ ok: false, error: 'missing value' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      const result = await probeTarget(spec);
+      return new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
     }
 
     // 动态订阅

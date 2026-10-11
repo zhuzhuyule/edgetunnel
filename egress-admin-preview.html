@@ -1,8 +1,8 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>tunnel-only · 智能出口配置台</title>
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>tunnel-only · 出口配置台</title>
 <style>
 *{box-sizing:border-box}
 body{font-family:-apple-system,"PingFang SC","Segoe UI",sans-serif;background:#eef1f6;color:#1f2937;margin:0;padding:20px}
-.w{max-width:1080px;margin:0 auto}
+.w{max-width:1100px;margin:0 auto}
 header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
 h1{font-size:20px;margin:0;display:flex;align-items:center;gap:8px}
 h1 .dot{width:10px;height:10px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 4px #16a34a22}
@@ -21,7 +21,7 @@ h2{font-size:15px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
 .btn.o{background:#16a34a}
 .btn.p{background:#7c3aed}
 .btn.y{background:#f59e0b;color:#fff}
-.btn.sm{padding:4px 8px;font-size:12px;border-radius:7px}
+.btn.sm{padding:4px 9px;font-size:12px;border-radius:7px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 input,select,textarea{border:1px solid #d1d5db;border-radius:9px;padding:8px 10px;font-size:13px;width:100%;background:#fff;color:#1f2937}
 input:focus,select:focus,textarea:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px #2563eb22}
@@ -30,6 +30,7 @@ textarea{min-height:120px;font-family:ui-monospace,Menlo,monospace;resize:vertic
 .item:hover{border-color:#c7d2fe;box-shadow:0 1px 4px rgba(37,99,235,.08)}
 .item.dragging{opacity:.4}
 .item.dragover{border-color:#2563eb;border-style:dashed}
+.item.off{opacity:.55}
 .grip{cursor:grab;color:#cbd5e1;font-size:16px;user-select:none;padding:0 2px}
 .grip:active{cursor:grabbing}
 .it-main{flex:1;min-width:0}
@@ -41,8 +42,9 @@ textarea{min-height:120px;font-family:ui-monospace,Menlo,monospace;resize:vertic
 .bad{background:#fee2e2;color:#991b1b}
 .warn{background:#fef3c7;color:#92400e}
 .neu{background:#f1f5f9;color:#64748b}
-.pre{background:#f8fafc;border:1px solid #e5e7eb;border-radius:9px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap;overflow:auto;max-height:230px}
-.stats{display:flex;gap:20px;flex-wrap:wrap}
+.pri{background:#ede9fe;color:#6d28d9}
+.pre{background:#f8fafc;border:1px solid #e5e7eb;border-radius:9px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap;overflow:auto;max-height:300px}
+.stats{display:flex;gap:14px;flex-wrap:wrap}
 .stat{text-align:center;padding:6px 16px;border-radius:11px;background:#f8fafc;border:1px solid #eef2f7;min-width:88px}
 .stat b{display:block;font-size:22px;line-height:1.2}
 .stat span{font-size:11px;color:#9ca3af}
@@ -62,10 +64,19 @@ summary .tag{margin-left:auto;font-size:11px;font-weight:600;color:#94a3b8;backg
 .dn{padding:6px 18px 18px}
 .empty{color:#9ca3af;font-size:13px;text-align:center;padding:18px;border:1px dashed #e2e8f0;border-radius:10px}
 .kbd{font-size:11px;background:#f1f5f9;border:1px solid #e2e8f0;border-bottom-width:2px;border-radius:5px;padding:1px 5px;color:#64748b}
+code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px}
+.help{font-size:12px;color:#6b7280;line-height:1.8}
+.help b{color:#374151}
+.sw{position:relative;width:38px;height:20px;flex-shrink:0}
+.sw input{opacity:0;width:0;height:0}
+.sw span{position:absolute;inset:0;background:#d1d5db;border-radius:20px;transition:.2s;cursor:pointer}
+.sw span:before{content:'';position:absolute;width:16px;height:16px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s}
+.sw input:checked+span{background:#16a34a}
+.sw input:checked+span:before{transform:translateX(18px)}
 </style></head><body><div class="w">
 <header>
-  <div><h1><span class="dot"></span>tunnel-only · 智能出口配置台</h1><p class="note">一键拉取优选入口 · 自动发现反代出口 · 健康检测 · 预设管理，无需手写 JSON。</p></div>
-  <div class="row"><span class="kbd">Ctrl/⌘+S</span><span class="note">保存配置</span></div>
+  <div><h1><span class="dot"></span>tunnel-only · 出口配置台</h1><p class="note">填好出口与优选入口，下方实时生成 <code>egress.json</code>，复制粘贴进 CF KV 即可。</p></div>
+  <div class="row"><span class="kbd">Ctrl/⌘+S</span><span class="note">保存</span></div>
 </header>
 
 <div class="card">
@@ -84,13 +95,20 @@ summary .tag{margin-left:auto;font-size:11px;font-weight:600;color:#94a3b8;backg
     <button class="btn d" onclick="resetAll()">🗑 清空</button>
     <input type="file" id="importFile" accept=".json" style="display:none">
   </div>
+  <div class="row" style="margin-top:10px;padding-top:10px;border-top:1px dashed #e5e7eb">
+    <span class="note">🔬 真实测活（可选）：</span>
+    <input id="probeUrl" placeholder="Worker 地址，如 https://xxx.workers.dev" style="flex:2">
+    <input id="probeKey" placeholder="PROBE_KEY（若设置了）" style="flex:1">
+    <button class="btn g sm" onclick="saveProbeCfg()">保存</button>
+    <span class="note">填入后「测」走真实探测；留空用本地模拟。</span>
+  </div>
 </div>
 
-<details open><summary><span class="caret">▶</span>一 · 优选入口<span class="tag">客户端连哪个 CF 边缘 · 智能拉取 / 手动添加 / 检测</span></summary><div class="dn">
+<details open><summary><span class="caret">▶</span>一 · 优选入口 prefs<span class="tag">客户端连哪个 CF 边缘 · 全局一套</span></summary><div class="dn">
+  <p class="help"><b>这是什么：</b>客户端（手机/电脑上的代理软件）优先连到哪些 CF 边缘 IP。与出口是两个正交维度。<b>怎么填：</b>每行一条 <code>IP:PORT</code>，端口省略默认 443；也可粘贴优选 API 返回的整片结果。</p>
   <div class="grid2">
     <div>
       <h2>➕ 手动 / 批量添加</h2>
-      <p class="sub">每行一条 <code>IP:PORT</code>（端口可省略，默认 443）</p>
       <div class="row"><input id="prefIp" placeholder="1.2.3.4" style="flex:2"><input id="prefPort" value="443" style="flex:1"><button class="btn" onclick="addPref()">添加</button></div>
       <textarea id="prefBulk" placeholder="批量粘贴，每行一条：&#10;1.2.3.4:443&#10;5.6.7.8:8443&#10;2606:4700::1"></textarea>
       <div class="row"><button class="btn o" onclick="addPrefBulk()">批量导入</button><span id="prefBulkStatus" class="note"></span></div>
@@ -100,17 +118,22 @@ summary .tag{margin-left:auto;font-size:11px;font-weight:600;color:#94a3b8;backg
       <p class="sub">支持纯文本 <code>IP:PORT</code> 或 JSON 数组</p>
       <div class="row"><input id="prefApi" value="https://cf.090227.xyz/cu?port=443" style="flex:1"><button class="btn" onclick="fetchPref()">拉取</button></div>
       <div class="row" style="margin-top:10px"><button class="btn g sm" onclick="checkAllPref()">检测全部入口</button><span id="prefCheckStatus" class="note"></span></div>
+      <p class="help" style="margin-top:10px">💡 检测为本地模拟，真实延迟需后端探针；此处仅用于排序筛选。</p>
     </div>
   </div>
   <div style="margin-top:12px"><div id="prefList"></div></div>
 </div></details>
 
-<details open><summary><span class="caret">▶</span>二 · 出口节点<span class="tag">Worker 出站目标 · SOCKS5 + 反代 · 智能发现</span></summary><div class="dn">
+<details open><summary><span class="caret">▶</span>二 · 出口节点 egress<span class="tag">Worker 出站目标 · SOCKS5 / 反代域名</span></summary><div class="dn">
+  <p class="help"><b>这是什么：</b>Worker 把流量送到哪里（决定你的出口国家/地区）。<b>两种类型：</b>
+  <b>① SOCKS5</b>（推荐）：真正的代理服务器，值填 <code>账号:密码@地址:端口</code>（无密码则 <code>地址:端口</code>），例如你的 smart-vpngate。
+  <b>② 反代域名</b>：VLESS 节点地址指向某个域名/CDN，值填 <code>域名:端口</code>。
+  每个出口可<b>启用/停用</b>，并设一个<b>默认出口</b>（未指定 <code>?egress=</code> 时使用）。</p>
   <div class="grid2">
     <div>
       <h2>➕ 手动添加</h2>
-      <p class="sub">SOCKS5 值：<code>账号:密码@地址:端口</code>；反代值：<code>host:port</code></p>
-      <div class="row"><select id="egType" style="flex:0 0 90px"><option value="socks5">SOCKS5</option><option value="proxy">反代</option></select><input id="egName" placeholder="名称" style="flex:1"><input id="egValue" placeholder="值" style="flex:2"><button class="btn" onclick="addEgress()">添加</button></div>
+      <div class="row"><select id="egType" style="flex:0 0 110px"><option value="socks5">SOCKS5</option><option value="proxy">反代域名</option></select><input id="egName" placeholder="名称，如 jp-tokyo" style="flex:1"><input id="egValue" placeholder="SOCKS5: 账号:密码@地址:端口 ｜ 反代: 域名:端口" style="flex:2"><button class="btn" onclick="addEgress()">添加</button></div>
+      <p class="help" style="margin-top:8px">名称建议用 <code>地区-城市</code>，会显示在订阅节点名里。</p>
     </div>
     <div>
       <h2>🛰 智能发现（smart-vpngate）</h2>
@@ -123,42 +146,77 @@ summary .tag{margin-left:auto;font-size:11px;font-weight:600;color:#94a3b8;backg
 </div></details>
 
 
-<details open><summary><span class="caret">▶</span>三 · 生成规则与订阅预览<span class="tag">优选入口 × 出口节点 = 订阅节点</span></summary><div class="dn">
-  <div class="row">
-    <label style="display:flex;align-items:center;gap:6px;font-size:13px">带优选入口 <input type="checkbox" id="full" style="width:auto" checked onchange="drawSub()"></label>
-    <label style="display:flex;align-items:center;gap:6px;font-size:13px">仅保留可用出口 <input type="checkbox" id="onlyOk" style="width:auto" onchange="drawSub()"></label>
-    <span class="note">订阅数量 <b id="subCount">0</b> 条</span>
-  </div>
-  <pre id="subPreview" class="pre" style="margin-top:10px"></pre>
-  <div class="row"><button class="btn o" onclick="copyText(document.getElementById('subPreview').textContent,'订阅')">复制订阅</button><button class="btn g" onclick="copyText(document.getElementById('subPreview').textContent,'节点')">复制节点</button><button class="btn g" onclick="downloadSub()">下载 .txt</button></div>
+<details open><summary><span class="caret">▶</span>三 · 最终配置（复制到 CF KV）<span class="tag">你填的内容会自动变成这段配置</span></summary><div class="dn">
+  <p class="help">你在上面填的出口和优选入口，会自动汇总成下面这段配置。Worker 靠它知道有哪些出口。<br>
+  <b>怎么用（三步）：</b>① 点下面「复制配置」→ ② 打开 Cloudflare 后台 → 你的 Worker 绑定的 <b>KV 命名空间</b> → ③ 新建一个键，键名填 <code>egress.json</code>，值粘贴这段，保存。<br>
+  当前默认出口：<b id="defName">（未设置）</b></p>
+  <pre id="cfgPreview" class="pre"></pre>
+  <div class="row"><button class="btn o" onclick="copyCfg()">📋 复制配置</button><button class="btn g" onclick="downloadCfg()">下载 .json</button><span id="cfgStatus" class="note"></span></div>
 </div></details>
 
-<details><summary><span class="caret">▶</span>四 · 预设管理<span class="tag">保存 / 加载 / 导入导出</span></summary><div class="dn">
-  <div id="presetList"></div>
+<details open><summary><span class="caret">▶</span>四 · 订阅节点预览<span class="tag">Worker /sub 将生成的 VLESS 节点</span></summary><div class="dn">
+  <div class="row">
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px">仅可用出口 <input type="checkbox" id="onlyOk" style="width:auto" onchange="drawSub()"></label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px">范围
+      <select id="subScope" style="width:auto" onchange="drawSub()"><option value="all">全部启用出口</option><option value="default">仅默认出口</option></select>
+    </label>
+    <span class="note">节点 <b id="subCount">0</b> 条</span>
+  </div>
+  <pre id="subPreview" class="pre" style="margin-top:10px"></pre>
+  <div class="row"><button class="btn o" onclick="copyText(document.getElementById('subPreview').textContent,'订阅')">复制节点</button><button class="btn g" onclick="downloadSub()">下载 .txt</button></div>
+  <p class="help" style="margin-top:8px">公式：<b>每个 SOCKS5 出口 × 每个优选入口</b> + <b>每个反代域名出口 1 条</b>。</p>
 </div></details>
+
+<details><summary><span class="caret">▶</span>五 · 预设管理<span class="tag">保存 / 加载 / 导入导出</span></summary><div class="dn"><div id="presetList"></div></div></details>
 </div>
 <div class="toast" id="toast"></div>
 
 
 <script>
-var K='tunnel-intel-v3';
-var UUID='90cd4a77-141a-43c9-991b-08263cfe9c10';
-var S={prefs:[],egress:[],full:true,presets:{}};
-function load(){try{var t=JSON.parse(localStorage.getItem(K));if(t){S=t;S.prefs=S.prefs||[];S.egress=S.egress||[];S.presets=S.presets||{}}}catch(e){}}
+var K='tunnel-only-cfg-v1';
+// 数据结构严格对齐 EGRESS_CONTRACT.md
+var S={version:1,default:null,egress:[],prefs:[],presets:{}};
+function load(){try{var t=JSON.parse(localStorage.getItem(K));if(t){S=t;S.egress=S.egress||[];S.prefs=S.prefs||[];S.presets=S.presets||{};S.version=1;}}catch(e){}}
 function save(){localStorage.setItem(K,JSON.stringify(S));}
-function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function getProbe(){try{return JSON.parse(localStorage.getItem('tunnel-probe')||'{}');}catch(e){return {};}}
+function saveProbe(o){localStorage.setItem('tunnel-probe',JSON.stringify(o));}
+function saveProbeCfg(){var o={url:document.getElementById('probeUrl').value.trim(),key:document.getElementById('probeKey').value.trim()};saveProbe(o);toast(o.url?'已保存测活地址':'已清空测活地址（回退本地模拟）');}
+// 通过 Worker /probe 测活一个出口档案；无 Worker 地址时返回 null（调用方回退模拟）
+function probeVia(eg){
+  var pr=getProbe();
+  if(!pr.url)return Promise.resolve(null);
+  var qs='?egress='+encodeURIComponent(eg.name);
+  if(pr.key)qs+='&key='+encodeURIComponent(pr.key);
+  return fetch(pr.url.replace(/\/+$/,'')+'/probe'+qs,{signal:AbortSignal.timeout?AbortSignal.timeout(9000):undefined})
+    .then(function(r){return r.json();})
+    .then(function(d){return {ok:!!d.ok,latency:d.latency,loc:d.loc,ip:d.ip,error:d.error};})
+    .catch(function(e){return {ok:false,error:e.message};});
+}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show')},2200);}
 function hash(s){var h=0,i;for(i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))>>>0;}return h;}
+function enabledEgress(){return S.egress.filter(function(e){return e&&e.enabled!==false;});}
 function okPill(ok){if(ok===true)return '<span class="pill ok">✓ 可用</span>';if(ok===false)return '<span class="pill bad">✗ 不可用</span>';if(ok==='checking')return '<span class="pill warn">⟳ 检测中</span>';return '<span class="pill neu">未测试</span>';}
+// 生成对齐契约的干净配置对象（剥离 ok/latency 等运行时字段）
+function buildCfg(){
+  return {
+    version:1,
+    default:S.default||null,
+    egress:S.egress.map(function(e){return {name:e.name,type:e.type,value:e.value,remark:e.remark||'',enabled:e.enabled!==false};}),
+    prefs:S.prefs.map(function(p){return {ip:p.ip,port:String(p.port||443)};})
+  };
+}
 function recalc(){
-  var okE=S.egress.filter(function(e){return e.ok!==false;}).length;
+  var okE=enabledEgress().filter(function(e){return e.ok!==false;}).length;
+  var sub=countSub();
   document.getElementById('nPrefs').textContent=S.prefs.length;
   document.getElementById('nEgress').textContent=S.egress.length;
-  document.getElementById('nSub').textContent=S.prefs.length*S.egress.length;
+  document.getElementById('nSub').textContent=sub;
   document.getElementById('nOk').textContent=okE;
+  document.getElementById('defName').textContent=S.default||'（未设置，将取第一个启用出口）';
   render();
 }
-function render(){renderPrefs();renderEgress();renderPresets();drawSub();}
+function render(){renderPrefs();renderEgress();renderPresets();drawCfg();drawSub();}
 
 /* ---------- 优选入口 ---------- */
 function renderPrefs(){
@@ -169,17 +227,11 @@ function renderPrefs(){
     var d=document.createElement('div');
     d.className='item';
     d.innerHTML='<span class="grip" draggable="true" data-kind="pref" data-idx="'+i+'" title="拖拽排序">⋮⋮</span>'+
-      '<div class="it-main"><div class="it-title">'+esc(p.ip)+':'+esc(p.port)+' '+okPill(p.ok)+
-      (p.latency!=null?'<span class="pill neu">'+p.latency+'ms</span>':'')+'</div>'+
+      '<div class="it-main"><div class="it-title">'+esc(p.ip)+':'+esc(p.port)+' '+okPill(p.ok)+(p.latency!=null?'<span class="pill neu">'+p.latency+'ms</span>':'')+'</div>'+
       '<div class="it-meta">'+esc(p.remark||'')+'</div>'+
       '<div class="ed" id="edPref'+i+'"><div class="row"><input id="epIp'+i+'" value="'+esc(p.ip)+'" placeholder="IP"><input id="epPort'+i+'" value="'+esc(p.port)+'" style="max-width:90px"><input id="epRemark'+i+'" value="'+esc(p.remark||'')+'" placeholder="备注"></div>'+
       '<div class="row"><button class="btn o sm" onclick="savePref('+i+')">保存</button><button class="btn g sm" onclick="toggleEdit(\'pref\','+i+')">取消</button></div></div></div>'+
-      '<div class="it-ops">'+
-      '<button class="btn g sm" title="上移" onclick="move(\'pref\','+i+',-1)">↑</button>'+
-      '<button class="btn g sm" title="下移" onclick="move(\'pref\','+i+',1)">↓</button>'+
-      '<button class="btn y sm" title="检测" onclick="checkPref('+i+')">测</button>'+
-      '<button class="btn g sm" title="编辑" onclick="toggleEdit(\'pref\','+i+')">✎</button>'+
-      '<button class="btn d sm" title="删除" onclick="del(\'pref\','+i+')">✕</button></div>';
+      '<div class="it-ops"><button class="btn g sm" title="上移" onclick="move(\'pref\','+i+',-1)">↑</button><button class="btn g sm" title="下移" onclick="move(\'pref\','+i+',1)">↓</button><button class="btn y sm" title="检测" onclick="checkPref('+i+')">测</button><button class="btn g sm" title="编辑" onclick="toggleEdit(\'pref\','+i+')">✎</button><button class="btn d sm" title="删除" onclick="del(\'pref\','+i+')">✕</button></div>';
     box.appendChild(d);
   });
   bindGrip();
@@ -248,15 +300,18 @@ function renderEgress(){
   box.innerHTML='';
   S.egress.forEach(function(e,i){
     var d=document.createElement('div');
-    d.className='item';
-    var t=e.type==='proxy'?'反代':'SOCKS5';
+    d.className='item'+(e.enabled===false?' off':'');
+    var t=e.type==='proxy'?'反代域名':'SOCKS5';
+    var isDef=S.default===e.name;
     d.innerHTML='<span class="grip" draggable="true" data-kind="egress" data-idx="'+i+'" title="拖拽排序">⋮⋮</span>'+
       '<div class="it-main"><div class="it-title">'+esc(e.name||'无名')+'<span class="pill '+(e.type==='proxy'?'ok':'neu')+'">'+t+'</span>'+okPill(e.ok)+
-      (e.latency!=null?'<span class="pill neu">'+e.latency+'ms</span>':'')+'</div>'+
+      (isDef?'<span class="pill pri">★ 默认</span>':'')+(e.latency!=null?'<span class="pill neu">'+e.latency+'ms</span>':'')+'</div>'+
       '<div class="it-meta">'+esc(e.value||'')+(e.remark?' · '+esc(e.remark):'')+'</div>'+
-      '<div class="ed" id="edEgress'+i+'"><div class="row"><select id="eeType'+i+'" style="max-width:96px"><option value="socks5"'+(e.type==='socks5'?' selected':'')+'>SOCKS5</option><option value="proxy"'+(e.type==='proxy'?' selected':'')+'>反代</option><input id="eeName'+i+'" value="'+esc(e.name||'')+'" placeholder="名称"><input id="eeValue'+i+'" value="'+esc(e.value||'')+'" placeholder="值"><input id="eeRemark'+i+'" value="'+esc(e.remark||'')+'" placeholder="备注"></div>'+
+      '<div class="ed" id="edEgress'+i+'"><div class="row"><select id="eeType'+i+'" style="max-width:110px"><option value="socks5"'+(e.type==='socks5'?' selected':'')+'>SOCKS5</option><option value="proxy"'+(e.type==='proxy'?' selected':'')+'>反代域名</option><input id="eeName'+i+'" value="'+esc(e.name||'')+'" placeholder="名称"><input id="eeValue'+i+'" value="'+esc(e.value||'')+'" placeholder="值"><input id="eeRemark'+i+'" value="'+esc(e.remark||'')+'" placeholder="备注"></div>'+
       '<div class="row"><button class="btn o sm" onclick="saveEgress('+i+')">保存</button><button class="btn g sm" onclick="toggleEdit(\'egress\','+i+')">取消</button></div></div></div>'+
       '<div class="it-ops">'+
+      '<label class="sw" title="启用/停用"><input type="checkbox" '+(e.enabled!==false?'checked':'')+' onchange="toggleEnable('+i+')"><span></span></label>'+
+      '<button class="btn '+(isDef?'p':'g')+' sm" title="设为默认" onclick="setDefault('+i+')">★</button>'+
       '<button class="btn g sm" title="上移" onclick="move(\'egress\','+i+',-1)">↑</button>'+
       '<button class="btn g sm" title="下移" onclick="move(\'egress\','+i+',1)">↓</button>'+
       '<button class="btn y sm" title="检测" onclick="checkEgress('+i+')">测</button>'+
@@ -271,19 +326,33 @@ function addEgress(){
   var name=document.getElementById('egName').value.trim();
   var val=document.getElementById('egValue').value.trim();
   if(!name||!val){toast('名称和值不能为空');return;}
-  S.egress.push({name:name,type:type,value:val,remark:'',ok:null});
+  if(S.egress.some(function(e){return e.name===name;})){toast('名称已存在');return;}
+  S.egress.push({name:name,type:type,value:val,remark:'',enabled:true,ok:null});
+  if(!S.default)S.default=name;
   document.getElementById('egName').value='';document.getElementById('egValue').value='';save();recalc();
 }
 function saveEgress(i){
+  var old=S.egress[i].name;
   S.egress[i].type=document.getElementById('eeType'+i).value;
   S.egress[i].name=document.getElementById('eeName'+i).value.trim();
   S.egress[i].value=document.getElementById('eeValue'+i).value.trim();
   S.egress[i].remark=document.getElementById('eeRemark'+i).value.trim();
+  if(S.default===old)S.default=S.egress[i].name;
   save();recalc();
 }
+function toggleEnable(i){S.egress[i].enabled=S.egress[i].enabled===false?true:false;
+  if(S.egress[i].enabled===false&&S.default===S.egress[i].name){var f=enabledEgress()[0];S.default=f?f.name:null;}
+  save();recalc();}
+function setDefault(i){S.default=S.egress[i].name;save();recalc();toast('默认出口：'+S.egress[i].name);}
 function checkEgress(i){
   var e=S.egress[i];e.ok='checking';renderEgress();
-  setTimeout(function(){var h=hash(e.type+e.value);e.ok=(h%10)>0;e.latency=(h%180)+15;save();recalc();},350);
+  probeVia(e).then(function(res){
+    if(res===null){ // 未配置 Worker，回退本地模拟
+      setTimeout(function(){var h=hash(e.type+e.value);e.ok=(h%10)>0;e.latency=(h%180)+15;save();recalc();},350);
+      return;
+    }
+    e.ok=res.ok;e.latency=res.latency;if(res.loc)e.remark=(e.remark&&e.remark.indexOf(res.loc)<0?e.remark+' ':'')+res.loc;save();recalc();
+  });
 }
 function discoverVpngate(){
   var host=document.getElementById('vpsHost').value.trim();
@@ -297,7 +366,7 @@ function discoverVpngate(){
     var added=0;
     Object.keys(d.nodes).forEach(function(k){
       var v=d.nodes[k];
-      if(v.proxy_ok){var name=k.replace(/^vpngate_/,'').toUpperCase();S.egress.push({name:name,type:'socks5',value:'vpngate:PASS@'+host+':'+v.port,remark:v.ip+' '+(v.latency||''),ok:true});added++;}
+      if(v.proxy_ok){var name=k.replace(/^vpngate_/,'').toUpperCase();if(S.egress.some(function(e){return e.name===name;}))return;S.egress.push({name:name,type:'socks5',value:'vpngate:PASS@'+host+':'+v.port,remark:v.ip+' '+(v.latency||''),enabled:true,ok:true});added++;if(!S.default)S.default=name;}
     });
     save();recalc();st.textContent='已发现 '+added+' 个出口节点';toast('发现 '+added+' 个出口');
   }).catch(function(e){st.textContent='发现失败: '+e.message+'（需 VPS 开放 CORS）';});
@@ -305,65 +374,83 @@ function discoverVpngate(){
 
 /* ---------- 通用：移动 / 删除 / 拖拽 / 全检 ---------- */
 function move(kind,i,dir){
-  var arr=S[kind==='pref'?'prefs':'egress'];
+  var arr=kind==='pref'?S.prefs:S.egress;
   var j=i+dir;if(j<0||j>=arr.length)return;
   var t=arr[i];arr[i]=arr[j];arr[j]=t;save();recalc();
 }
 function del(kind,i){
-  if(kind==='pref')S.prefs.splice(i,1);else S.egress.splice(i,1);
+  if(kind==='pref'){S.prefs.splice(i,1);}
+  else{var nm=S.egress[i].name;S.egress.splice(i,1);if(S.default===nm){var f=enabledEgress()[0];S.default=f?f.name:null;}}
   save();recalc();
 }
 function detectAll(){checkAllPref();S.egress.forEach(function(e,i){setTimeout(function(){checkEgress(i);},i*180);});}
 var dragKind=null,dragIdx=null;
 function bindGrip(){
-  var grips=document.querySelectorAll('.grip');
-  grips.forEach(function(g){
+  document.querySelectorAll('.grip').forEach(function(g){
     g.addEventListener('dragstart',function(ev){dragKind=this.dataset.kind;dragIdx=parseInt(this.dataset.idx,10);this.closest('.item').classList.add('dragging');ev.dataTransfer.effectAllowed='move';try{ev.dataTransfer.setData('text/plain',dragIdx);}catch(e){}});
     g.addEventListener('dragend',function(){this.closest('.item').classList.remove('dragging');});
   });
-  var items=document.querySelectorAll('.item');
-  items.forEach(function(it){
+  document.querySelectorAll('.item').forEach(function(it){
     it.addEventListener('dragover',function(ev){ev.preventDefault();if(!this.classList.contains('dragging'))this.classList.add('dragover');});
     it.addEventListener('dragleave',function(){this.classList.remove('dragover');});
     it.addEventListener('drop',function(ev){
       ev.preventDefault();this.classList.remove('dragover');
-      var list=[].slice.call(this.parentNode.children);
-      var toIdx=list.indexOf(this);
+      var list=[].slice.call(this.parentNode.children);var toIdx=list.indexOf(this);
       if(dragKind==null||toIdx<0)return;
-      var arr=S[dragKind==='pref'?'prefs':'egress'];
+      var arr=dragKind==='pref'?S.prefs:S.egress;
       var moved=arr.splice(dragIdx,1)[0];arr.splice(toIdx,0,moved);save();recalc();
     });
   });
 }
+/* ---------- egress.json 预览（对齐契约） ---------- */
+function drawCfg(){
+  var cfg=buildCfg();
+  document.getElementById('cfgPreview').textContent=JSON.stringify(cfg,null,2);
+}
+function copyCfg(){copyText(JSON.stringify(buildCfg(),null,2),'egress.json');}
+function downloadCfg(){
+  var blob=new Blob([JSON.stringify(buildCfg(),null,2)],{type:'application/json'});var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='egress.json';a.click();toast('已下载 egress.json');
+}
 /* ---------- 订阅预览 ---------- */
-function drawSub(){
-  var lines=[];
-  var full=document.getElementById('full').checked;
+function countSub(){
   var onlyOk=document.getElementById('onlyOk').checked;
-  var egs=S.egress.filter(function(e){return !onlyOk||e.ok!==false;});
-  if(!egs.length){document.getElementById('subPreview').textContent='无可用出口节点';document.getElementById('subCount').textContent=0;return;}
-  if(full){
-    egs.forEach(function(e){S.prefs.forEach(function(p){
-      var path='/egress='+encodeURIComponent(e.name);
-      var host=e.type==='proxy'?e.value.split(':')[0]:p.ip;
-      var port=e.type==='proxy'?(e.value.split(':')[1]||443):p.port;
-      lines.push('vless://'+UUID+'@'+host+':'+port+'?path='+path+'#'+encodeURIComponent(e.name+'·'+p.ip));
-    });});
-  }else{
-    egs.forEach(function(e){
-      var host=e.type==='proxy'?e.value.split(':')[0]:'tunnel.example.workers.dev';
-      var port=e.type==='proxy'?(e.value.split(':')[1]||443):443;
-      lines.push('vless://'+UUID+'@'+host+':'+port+'?path=/egress='+encodeURIComponent(e.name)+'#'+encodeURIComponent(e.name));
-    });
-  }
+  var scope=document.getElementById('subScope').value;
+  var list=enabledEgress().filter(function(e){return !onlyOk||e.ok!==false;});
+  if(scope==='default'&&S.default){var d=list.find(function(e){return e.name===S.default;});list=d?[d]:list;}
+  var n=0;
+  list.forEach(function(e){
+    if(e.type==='proxy')n+=1;
+    else n+=Math.max(1,S.prefs.length);
+  });
+  return n;
+}
+function drawSub(){
+  var onlyOk=document.getElementById('onlyOk').checked;
+  var scope=document.getElementById('subScope').value;
+  var list=enabledEgress().filter(function(e){return !onlyOk||e.ok!==false;});
+  if(scope==='default'&&S.default){var d=list.find(function(e){return e.name===S.default;});list=d?[d]:list;}
+  var lines=[];
+  list.forEach(function(e){
+    var tag=e.name;
+    if(e.type==='proxy'){
+      var idx=e.value.lastIndexOf(':');var h=idx>-1?e.value.slice(0,idx):e.value;var p=idx>-1?(parseInt(e.value.slice(idx+1),10)||443):443;
+      lines.push('vless://UUID@'+h+':'+p+'?path='+encodeURIComponent('/?egress='+encodeURIComponent(tag))+'&security=tls&type=ws&encryption=none#'+encodeURIComponent(tag));
+    }else{
+      var edges=S.prefs.length?S.prefs:[{ip:'your.worker.domain',port:443}];
+      edges.forEach(function(pf){
+        lines.push('vless://UUID@'+pf.ip+':'+pf.port+'?path='+encodeURIComponent('/?egress='+encodeURIComponent(tag))+'&security=tls&type=ws&encryption=none#'+encodeURIComponent(tag+'·'+pf.ip));
+      });
+    }
+  });
   document.getElementById('subPreview').textContent=lines.join('\n')||'无节点';
   document.getElementById('subCount').textContent=lines.length;
 }
-function copyText(txt,name){if(!txt||txt.indexOf('无')===0){toast('没有可复制的内容');return;}navigator.clipboard.writeText(txt).then(function(){toast('已复制'+name);},function(){toast('复制失败');});}
+function copyText(txt,name){if(!txt||/^无/.test(txt)){toast('没有可复制的内容');return;}navigator.clipboard.writeText(txt).then(function(){toast('已复制'+name);},function(){toast('复制失败');});}
 function downloadSub(){
   var txt=document.getElementById('subPreview').textContent||'';
   var blob=new Blob([txt],{type:'text/plain'});var a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download='subscription.txt';a.click();toast('已下载 subscription.txt');
+  a.href=URL.createObjectURL(blob);a.download='nodes.txt';a.click();toast('已下载 nodes.txt');
 }
 
 /* ---------- 预设管理 ---------- */
@@ -376,46 +463,62 @@ function renderPresets(){
   names.forEach(function(n){
     var p=S.presets[n]||{};var cnt=(p.prefs?p.prefs.length:0)+'×'+(p.egress?p.egress.length:0);
     html+='<div class="item" style="flex:0 0 auto"><span class="it-title">'+esc(n)+' <span class="pill neu">'+cnt+'</span></span>'+
-      '<div class="it-ops"><button class="btn o sm" onclick="loadPreset(\''+esc(n)+'\')">加载</button>'+
-      '<button class="btn d sm" onclick="delPreset(\''+esc(n)+'\')">删除</button></div></div>';
+      '<div class="it-ops"><button class="btn o sm" onclick="loadPreset(\''+esc(n)+'\')">加载</button><button class="btn d sm" onclick="delPreset(\''+esc(n)+'\')">删除</button></div></div>';
   });
   html+='</div>';box.innerHTML=html;
 }
 function openSavePreset(){
   var name=prompt('预设名称','我的配置-'+(Object.keys(S.presets).length+1));
   if(!name)return;
-  S.presets[name]={prefs:JSON.parse(JSON.stringify(S.prefs)),egress:JSON.parse(JSON.stringify(S.egress)),full:S.full,time:Date.now()};
+  S.presets[name]={version:1,default:S.default,prefs:JSON.parse(JSON.stringify(S.prefs)),egress:JSON.parse(JSON.stringify(S.egress)),time:Date.now()};
   save();renderPresets();toast('已保存预设: '+name);
 }
 function loadPreset(name){
   var p=S.presets[name];if(!p)return;
-  S.prefs=p.prefs||[];S.egress=p.egress||[];S.full=p.full!==false;
+  S.prefs=p.prefs||[];S.egress=p.egress||[];S.default=p.default||null;
   save();recalc();toast('已加载: '+name);
 }
 function delPreset(name){if(!confirm('删除预设 '+name+'?'))return;delete S.presets[name];save();renderPresets();}
-function openLoadPreset(){var d=document.querySelectorAll('details');d.forEach(function(x){if(x.textContent.indexOf('预设管理')>=0)x.open=true;});renderPresets();}
-/* ---------- 导入 / 导出 / 重置 ---------- */
+function openLoadPreset(){document.querySelectorAll('details').forEach(function(x){if(x.textContent.indexOf('预设管理')>=0)x.open=true;});renderPresets();}
+/* ---------- 导入 / 导出 / 重置（契约容错） ---------- */
 function exportJson(){
-  var out={version:3,prefs:S.prefs,egress:S.egress,full:S.full,time:Date.now()};
-  var blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});var a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download='tunnel-config.json';a.click();toast('已导出 JSON');
+  var blob=new Blob([JSON.stringify(buildCfg(),null,2)],{type:'application/json'});var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='egress.json';a.click();toast('已导出 egress.json');
 }
 function triggerImport(){document.getElementById('importFile').click();}
-function resetAll(){if(!confirm('确认清空所有优选入口与出口节点？'))return;S.prefs=[];S.egress=[];save();recalc();toast('已清空');}
+function resetAll(){if(!confirm('确认清空所有出口与优选入口？'))return;S.egress=[];S.prefs=[];S.default=null;save();recalc();toast('已清空');}
+function applyCfg(d){
+  S.version=1;
+  S.default=d.default||null;
+  S.egress=(d.egress||[]).map(function(e){return {name:e.name,type:e.type||'socks5',value:e.value,remark:e.remark||'',enabled:e.enabled!==false,ok:null};});
+  S.prefs=(d.prefs||[]).map(function(p){
+    if(typeof p==='string'){var m=p.match(/^(.+?):(\d+)$/);return m?{ip:m[1],port:m[2],ok:null}:{ip:p,port:'443',ok:null};}
+    return {ip:p.ip,port:String(p.port||443),remark:p.remark||'',ok:null};
+  });
+  if(!S.default){var f=enabledEgress()[0];S.default=f?f.name:null;}
+}
 /* ---------- 初始化 ---------- */
 document.getElementById('importFile').addEventListener('change',function(ev){
   var f=ev.target.files[0];if(!f)return;var r=new FileReader();
   r.onload=function(){
     try{var d=JSON.parse(r.result);
-      S.prefs=(d.prefs||[]).map(function(p){return typeof p==='string'?{ip:p.split(':')[0],port:(p.split(':')[1]||'443'),ok:null}:p;});
-      S.egress=d.egress||[];S.full=d.full!==false;save();recalc();toast('导入成功');
+      // 容错：旧版扁平数组直接当 egress
+      if(Array.isArray(d)){applyCfg({egress:d,prefs:[],default:null});}
+      else{applyCfg(d);}
+      save();recalc();toast('导入成功');
     }catch(e){toast('导入失败: '+e.message);}
     ev.target.value='';
   };
   r.readAsText(f);
 });
 document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();save();toast('配置已保存');}});
-load();recalc();
+load();
+// 保证默认出口指向有效启用出口
+if(S.default&&!enabledEgress().some(function(e){return e.name===S.default;})){var f0=enabledEgress()[0];S.default=f0?f0.name:null;}
+else if(!S.default){var f1=enabledEgress()[0];S.default=f1?f1.name:null;}
+recalc();
+// 回填测活配置
+(function(){var pr=getProbe();if(pr.url)document.getElementById('probeUrl').value=pr.url;if(pr.key)document.getElementById('probeKey').value=pr.key;})();
 </script>
 </body></html>
 
