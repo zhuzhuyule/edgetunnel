@@ -17,6 +17,7 @@ id = "88ea9a396b474c00b21ae9f2552c43bb"
 # SUB_KEY    = ""              # /sub 订阅访问密钥（留空则不鉴权，不建议）
 # UUID       = ""              # VLESS UUID；留空则由 KEY/ADMIN 确定性派生
 # KEY        = ""              # 用于派生 UUID 的种子（无 UUID 时）
+# ADMIN      = ""              # /admin 配置面板访问令牌（查询 ?k=ADMIN），留空则公开访问
 
 # 运行时注意：CF Workers 禁止出站 TCP 到 Cloudflare IP 段。
 # 因此 type=proxy 的反代地址若指向 CF anycast/PROXYIP 可能被拒；

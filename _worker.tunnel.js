@@ -389,6 +389,125 @@ function _p(host) {
  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Welcome to nginx!</title><style>body{width:60em;margin:0 auto;font-family:Tahoma,Verdana,Arial,sans-serif;background:#fff;color:#222}h1{font-size:2.4em}</style></head><body><h1>Welcome to nginx!</h1><p>If you see this page, the nginx web server is successfully installed and working.</p><p><em>${host}</em></p></body></html>`;
 }
 
+
+const _ADM_A = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>tunnel-only · Admin</title>
+<style>
+:root{--bg:#f0f3f8;--panel:#ffffff;--txt:#1e293b;--muted:#6474a6;--bd:#d0d7e2;--ink:#0f172a;--accent:#2563eb;--ok:#15803d;--bad:#b91c1c;--warn:#b45309;--codebg:#eef2f7}
+*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--txt);margin:0;line-height:1.5;font-size:14px}
+body.dark{--bg:#0b1220;--panel:#15203a;--txt:#e2e8f0;--muted:#7b9bb5;--bd:#1e3a5f;--ink:#f8fafc;--codebg:#0a0f1e}
+.top{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--bd);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.top h1{font-size:18px;margin:0;font-weight:600}
+.toggle{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;border:1px solid var(--bd);padding:4px 10px;border-radius:6px;background:var(--bg)}
+main{max-width:960px;margin:22px auto;padding:0 12px}
+.card{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:18px}
+h2{font-size:15px;margin:0 0 12px;color:var(--accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.itm{flex:1 1 180px}
+input[type=text],select,textarea{background:var(--codebg);border:1px solid var(--bd);border-radius:6px;color:var(--ink);padding:7px 10px;font-size:13px;width:100%;font-family:inherit;outline:none}
+textarea{min-height:110px;font-family:"SFMono-Regular",Consolas,monospace;font-size:12px;resize:vertical}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th,.tbl td{border:1px solid var(--bd);padding:6px 8px;text-align:left;font-size:13px;vertical-align:middle}
+.tbl th{color:var(--muted);font-weight:600}
+.btn{border:none;border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer;font-weight:600}
+.btn.ok{background:var(--accent);color:#fff}.btn.ok:hover{opacity:.9}
+.btn.bad{background:var(--bad);color:#fff}.btn.bad:hover{opacity:.9}
+.btn.ghost{background:var(--bg);color:var(--accent);border:1px solid var(--bd)}.btn.ghost:hover{opacity:.8}
+.bar{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap}
+.tip{font-size:12px;color:var(--muted);margin-top:10px}
+#status{font-size:12px}.msgok{color:var(--ok)}.msgerr{color:var(--bad)}.msgwarn{color:var(--warn)}
+code{background:var(--codebg);color:var(--accent);padding:1px 4px;border-radius:3px;font-size:12px}
+</style></head>
+<body>
+<div class="top"><h1>tunnel-only · 配置面板</h1><span class="toggle" onclick="toggleTheme()">🌓 <span id="ts">浅亮</span></span></div>
+<main>
+<div class="card">
+  <h2>线上端点 / Endpoints</h2>
+  <div class="row"><div class="itm"><a href="/version">/version</a></div><div class="itm"><a href="/sub">/sub</a></div><div class="itm"><a href="/probe">/probe</a></div><div class="itm"><a href="/admin">/admin</a></div></div>
+  <div class="bar">
+    <button class="btn ok" onclick="loadCfg()">刷新配置</button>
+    <button class="btn ok" onclick="saveCfg()">保存配置 (Save)</button>
+    <button class="btn ghost" onclick="downloadCfg()">导出 JSON</button>
+    <input type="file" id="up" accept=".json" style="display:none" onchange="uploadCfg(this)">
+    <button class="btn ghost" onclick="q('#up').click()">导入 JSON</button>
+    <span id="status" class="tip"></span>
+  </div>
+  <div class="tip">保存后写入 KV 键 <code>egress.json</code>，Worker 缓存清除后 30s 生效。</div>
+</div>
+<div class="card"><h2>默认出口 / Default egress</h2>
+  <div class="row"><div class="itm"><select id="def"><option value="">-- 直连默认 --</option></select></div></div>
+</div>
+<div class="card"><h2>出口列表 / Egress entries</h2>
+  <table class="tbl" id="eg"><thead><tr><th>名称 name</th><th>类型 type</th><th>值 value</th><th>备注 remark</th><th>启用</th><th>操作</th></tr></thead><tbody></tbody></table>
+  <div class="bar" style="margin-top:10px"><button class="btn ghost" onclick="addEgress()">+ 添加出口</button></div>
+  <div class="tip">type=socks5 → <code>user:pass@host:port</code>；type=proxy → <code>host:port</code></div>
+</div>
+<div class="card"><h2>优选入口 / Preferences (ip:port)</h2>
+  <table class="tbl" id="pf"><thead><tr><th>IP</th><th>Port</th><th>操作</th></tr></thead><tbody></tbody></table>
+  <div class="bar" style="margin-top:10px"><button class="btn ghost" onclick="addPref()">+ 添加优选</button></div>
+</div>
+<div class="card"><h2>原始 JSON</h2><textarea id="raw" spellcheck="false"></textarea></div>
+</main>
+`;
+const _ADM_B = `<script>
+const TOKEN = "%%TOK%%";
+const KVKEY = "egress.json";
+function q(s){return document.querySelector(s)}
+function el(t,a,p){let e=document.createElement(t);for(let k in a){if(k==="style"){Object.assign(e.style,a[k])}else if(k==="src"){e.src=a[k]}else{e.setAttribute(k,a[k])}}if(p){p.append(e)}return e}
+function fmt(v){try{return JSON.stringify(v,null,2)}catch(e){return String(v)}}
+function aurl(b){return TOKEN ? b + (b.indexOf("?")==-1?"?":"&") + "k=" + encodeURIComponent(TOKEN) : b}
+function setStatus(t,c){let s=q("#status");s.textContent=t;s.className=c||""}
+function toggleTheme(){let m=localStorage.getItem("theme")||"light";m=(m==="light"?"dark":"light");localStorage.setItem("theme",m);applyTheme(m)}
+function applyTheme(m){q("#ts").textContent=(m==="dark"?"深夜":"浅亮");document.body.classList.toggle("dark",m==="dark")}
+window.onload=function(){applyTheme(localStorage.getItem("theme")||"light");loadCfg()}
+async function loadCfg(){setStatus("读取中…","msgwarn");const r=await fetch(aurl("/admin/api/config"),{cache:"no-store"});let j
+try{j=await r.json()}catch(e){setStatus("读取失败: "+r.status,"msgerr");return}
+if(!r.ok){setStatus("读取失败: "+(j.error||r.status),"msgerr");return}
+q("#raw").value=fmt(j)
+let def=q("#def");def.innerHTML=""
+j.egress.forEach(function(e){let o=el("option",{},def);o.value=e.name;o.textContent=e.name+(e.enabled===false?"  (禁用)":"");o.selected=(j.default===e.name)})
+let o2=el("option",{},def);o2.value="";o2.textContent="直连默认";o2.selected=!j.default
+let eg=q("#eg tbody");eg.innerHTML="";j.egress.forEach(function(e){addEgress(e,eg)})
+let pf=q("#pf tbody");pf.innerHTML="";(j.prefs||[]).forEach(function(e){addPref(e,pf)})
+setStatus("已加载 "+j.version,"msgok")}
+function buildCfg(){const j={version:1,default:q("#def").value,egress:[],prefs:[]}
+q("#eg tbody tr").forEach(function(tr){j.egress.push(egToObj(tr))})
+q("#pf tbody tr").forEach(function(tr){let c=tr.querySelectorAll("input");j.prefs.push({ip:c[0].value,port:parseInt(c[1].value,10)||443})})
+return j}
+function egToObj(tr){let c=tr.querySelectorAll("input,select");return{name:c[0].value,type:c[1].value,value:c[2].value,remark:c[3].value,enabled:(c[4].checked)}}
+async function saveCfg(){setStatus("保存中…","msgwarn");const j=buildCfg();q("#raw").value=fmt(j)
+const r=await fetch(aurl("/admin/api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(j)})
+let j2;try{j2=await r.json()}catch(e){}
+if(!r.ok){setStatus("保存失败: "+((j2&&j2.error)||r.status),"msgerr");return}
+setStatus("保存成功","msgok")}
+function downloadCfg(){let j;try{j=JSON.parse(q("#raw").value)}catch(e){alert("JSON 错误")}const blob=new Blob([JSON.stringify(j,null,2)],{type:"application/json"})
+const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="egress.json";a.click()}
+function uploadCfg(inp){const f=inp.files[0];if(!f){return}const fr=new FileReader();fr.onload=function(e){q("#raw").value=e.target.result}}
+function addEgress(e,t){e=e||{name:"",type:"socks5",value:"",remark:"",enabled:true};let tr=el("tr",{},t||q("#eg tbody"))
+el("input",{type:"text",placeholder:"name",value:e.name,style:{width:"110px"}},tr)
+let sel=el("select",{},tr);["socks5","proxy"].forEach(function(tn){let o=el("option",{value:tn},sel);o.textContent=tn;if(e.type===tn)o.selected=true})
+el("input",{type:"text",placeholder:"value",value:e.value,style:{width:"200px"}},tr)
+el("input",{type:"text",placeholder:"remark",value:e.remark||""},tr)
+let cb=el("input",{type:"checkbox"},tr);cb.checked=(e.enabled!==false)
+let ops=el("td",{},tr);el("button",{textContent:"删除",className:"btn bad",onclick:"this.closest('tr').remove()"},ops)}
+function addPref(e){e=e||{ip:"",port:443};let tr=el("tr",{},q("#pf tbody"));el("input",{type:"text",placeholder:"ip",value:e.ip},tr);el("input",{type:"text",placeholder:"port",value:e.port},tr);let ops=el("td",{},tr);el("button",{textContent:"删除",className:"btn bad",onclick:"this.closest('tr').remove()"},ops)}
+</script>
+</body></html>`;
+function _a_admin(tok) { return (_ADM_A + _ADM_B).replace(/%%TOK%%/g, tok || ''); }
+function _a_login() {
+ return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>tunnel-only · Login</title>
+<style>*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;background:#eef2f7;color:#1e293b;margin:0;height:100vh;display:flex;align-items:center;justify-content:center}
+form{background:#fff;border:1px solid #d0d7e2;border-radius:12px;padding:28px 30px;box-shadow:0 4px 20px rgba(0,0,0,.07);min-width:300px}
+h1{font-size:18px;margin:0 0 6px}h3{font-size:13px;font-weight:400;color:#6474a6;margin:0 0 18px}
+input{width:100%;background:#eef2f7;border:1px solid #cbd6e0;border-radius:6px;color:#0f1726;padding:9px 11px;font-size:14px;outline:none}
+.btn{margin-top:16px;width:100%;border-radius:8px;background:#2563eb;color:#fff;border:none;padding:10px;font-size:14px;cursor:pointer;font-weight:600}
+.err{color:#b91c1c;font-size:12px;margin-top:10px}</style></head>
+<body><form autocomplete="off"><h1>tunnel-only · Admin</h1><h3>请输入访问令牌 Access token</h3>
+<input id="t" type="password" placeholder="token" autocomplete="off">
+<button type="submit">进入 / Enter</button><div class="err" id="e"></div></form>
+<script>document.querySelector("form").onsubmit=function(ev){ev.preventDefault();const v=document.getElementById("t").value.trim();if(!v){document.getElementById("e").textContent="请输入 token";return}location.href="/admin?k="+encodeURIComponent(v)}</script>
+</body></html>`;
+}
 // ---- 测活探针（/probe）----
 // 通用探活，两种模式：
 // direct：直连 host:port，发 HTTP /cdn-cgi/trace 读 ip/loc（测非 CF 的反代域名/服务器）
@@ -526,8 +645,8 @@ export default {
  }
  }
 
- // XHTTP（叉HTTP）主链：POST 且非 sub/version
- if (request.method === 'POST') {
+  // XHTTP（叉HTTP）主链：POST 且非 sub/version/admin
+ if (request.method === 'POST' && !url.pathname.toLowerCase().startsWith('/admin')) {
  const egName = url.searchParams.get('egress');
  const egress = _j(cfg, egName) || { name: 'direct', type: 'direct', value: '' };
  try {
@@ -537,6 +656,34 @@ export default {
  } catch (e) {
  return new Response('XHTTP error: ' + e.message, { status: 500 });
  }
+ }
+
+ // 在线配置面板 /admin 与 KV 读写（契约参见 EGRESS_CONTRACT.md）
+ const ap = url.pathname.toLowerCase(); const atok = env.ADMIN; const tok = url.searchParams.get('k'); const adminAuthed = (!atok || tok === atok);
+ if (ap === '/admin' || ap === '/admin/') {
+   if (!adminAuthed) return new Response(_a_login(), { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } }); return new Response(_a_admin(tok || ''), { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'no-store' } });
+ }
+ if (ap === '/admin/api/config') {
+    if (!adminAuthed) return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    const ak = env.EGRESS_KEY || 'egress.json';
+   if (request.method === 'GET') {
+     let raw = null;
+     try { if (env.KV && typeof env.KV.get === 'function') raw = await env.KV.get(ak); } catch (e) { }
+     let cfg = { version: 1, default: null, egress: [], prefs: [] };
+     if (raw) { try { cfg = JSON.parse(raw); } catch (e) { } }
+     return new Response(JSON.stringify(cfg), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+   }
+   if (request.method === 'POST') {
+     const txt = await request.text();
+     let cfg;
+     try { cfg = JSON.parse(txt); } catch (e) { return new Response(JSON.stringify({ ok: false, error: 'invalid json' }), { status: 400, headers: { 'Content-Type': 'application/json' } }); }
+     if (!Array.isArray(cfg.egress)) cfg.egress = [];
+     if (!Array.isArray(cfg.prefs)) cfg.prefs = [];
+     cfg.version = 1;
+     try { if (env.KV && typeof env.KV.put === 'function') { await env.KV.put(ak, JSON.stringify(cfg)); egressCache.data = null; egressCache.ts = 0; } } catch (e) { return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500, headers: { 'Content-Type': 'application/json' } }); }
+     return new Response(JSON.stringify({ ok: true, config: cfg }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+   }
+   return new Response('Method Not Allowed', { status: 405 });
  }
 
  // 其余一律伪装页兜底（防探活）
