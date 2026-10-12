@@ -2,14 +2,14 @@ name = "v20251104"
 # tunnel-only 精简版 Worker；回退到原版请改回 main = "_worker.js"
 main = "_worker.tunnel.js"
 # 较新的稳定兼容日期：connect()(cloudflare:sockets) 与 IdentityTransformStream 均需 >= 2024-09
-compatibility_date = "2026-01-01"
+compatibility_date = "2024-09-23"
 keep_vars = true
 
 # ---- 出口配置 KV（键名由 env.EGRESS_KEY 覆盖，默认 egress.json）----
 # 需在 CF 后台创建 KV 命名空间并填入下方 id
 [[kv_namespaces]]
 binding = "KV"          # 绑定名固定为 KV（Worker 内 env.KV）
-id = ""                 # TODO: 填入 KV 命名空间 id
+id = "88ea9a396b474c00b21ae9f2552c43bb"
 
 # ---- 可选变量（在 CF 后台 Variables 配置，也可取消注释写此处）----
 # [vars]
