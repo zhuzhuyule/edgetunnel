@@ -45,7 +45,7 @@ Worker 启动（或首次命中）读取一次，缓存于 isolate 内；写入�
 
 ## 2. 前端导入/导出 JSON 契约
 
-`egress-admin-preview.html` 的“导出/导入 JSON”**直接采用本结构**，保证“前端导出 → 贴到管理台/KV”零转换。
+``/admin`` 的“导出/导入 JSON”**直接采用本结构**，保证“前端导出 → 贴到管理台/KV”零转换。
 
 - 导出：`{ version:1, default, egress:[...], prefs:[...] }`，字段与 §1 一致。
 - 导入：容错解析——
@@ -101,3 +101,40 @@ Worker 启动（或首次命中）读取一次，缓存于 isolate 内；写入�
 2. **KV 键名**：固定 `egress.json`，还是允许 `env.EGRESS_KEY` 覆盖？
 3. **prefs 是否随订阅动态**：prefs 固定存 KV，还是每请求拉优选 API？（建议固定 KV，简单可控）
 4. **前端 `default`**：是否需要“按出口分组独立维护 prefs 子集”，还是全局一套 prefs？
+
+---
+
+## 7. 在线配置面板 `/admin`（in-Worker，tunnel-only）
+
+管理面板直接由 Worker 自身服务，无需额外静态页/函数。
+
+- **入口**：`GET /admin` — 校验查询参数 `?k=<ADMIN>`（对应 `env.ADMIN`）。
+  - 未传 `k` / 不匹配 → 返回 **登录页**（输入框 → 跳转 `/admin?k=<token>`）；`ADMIN` 留空时公开访问（dev 用）。
+  - `k` 合法 → 返回管理面板；前端把 token 嵌入页面，所有 API 调用自动在 URL 上带 `?k=`。
+- **API**：`GET | POST /admin/api/config?k=<ADMIN>`
+  - `GET` → 返回 `egress.json`（§1）：`{version,default,egress[],prefs[]}`；无 KV / 解析失败时回退默认结构。
+  - `POST JSON` → 写 KV 键 `egress.json`（或 `env.EGRESS_KEY`），返回 `{ok:true,config}`；失败返回 `4xx/5xx`。
+  - 缺 `k`（且 `ADMIN` 已设置）→ **401**。
+- **功能**：出口列表增删行（`socks5` → `user:pass@host:port`，`proxy` → `host:port`，`remark`/`enabled` 切换）；默认出口下拉；优选 IP（ip:port）增删；右上 JSON 编辑器；**导出 / 导入 JSON**（直贴 §1 结构）；**自动保存** — 字段修改防抖 500ms 自动 `POST`，手动「保存 (Save)」按钮也写 KV，保存后 30s 缓存清除全网生效。
+- **UI**：默认**浅色**；右上 `🌓` 切换浅/深（`localStorage.theme` 持久）；卡片悬浮阴影、zebra 表格、输入 `focus` 蓝环、保存 toast。
+
+---
+
+## 8. 分支与部署（tunnel-only）
+
+- 代码分支：**`tunnel-only`** — 存放「面板内建 + `?k=ADMIN` 鉴权 + KV 契约」的最终版 `_worker.tunnel.js` 与 `wrangler.toml`。落地前于该分支 **force-push**（由部署方维护单行历史，不走 PR 评审）。
+- 部署流水线（暂存）：
+  1. `cp _worker.tunnel.js /tmp/hello/worker.js`
+  2. `/tmp/hello/wrangler.toml` 绑定 `KV` + `[vars]` `ADMIN` + `EGRESS_KEY`。
+  3. `cd /tmp/hello && npx wrangler deploy` → `https://hello-tunnel-01.votype.workers.dev`。
+- 鉴权口令：`ADMIN = "tunnel123"`（部署时自行更换）→ 访问 `https://<host>/admin?k=<ADMIN>`。
+- 公开 vs 鉴权：`/sub` `/version` `/probe` `/` 公开；`/admin` 与 `/admin/api/config` 走 `?k=ADMIN` 鉴权。
+
+---
+
+## 9. 决策记录（ Resolutions ）
+
+- **订阅鉴权**（§6-1）：`/admin` 鉴权复用 `env.ADMIN`（查询 `?k=`）；`/sub` 订阅鉴权仍维持独立 `?`/`env.SUB_KEY`（不耦合 ADMIN）。
+- **KV 键名**（§6-2）：固定 `egress.json`，支持 `env.EGRESS_KEY` 覆盖。
+- **prefs**（§6-3）：固化于 KV，`/sub` 复用当前 `prefs` 列表。
+- **前端 default**（§6-4）：仍开放 — 是否按出口分组维护 prefs 子集，待拍板。
